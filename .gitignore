@@ -53,3 +53,7 @@ coverage.xml
 
 # Docker
 docker-compose.override.yml
+
+# Documentation (local only)
+CLAUDE.md
+WHATSAPP_SETUP.md
