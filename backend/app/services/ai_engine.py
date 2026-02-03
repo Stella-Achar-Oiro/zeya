@@ -10,15 +10,15 @@ import logging
 import time
 from typing import Optional
 
-import google.generativeai as genai
+from google import genai
 
 from app.core.config import settings
 from app.core.redis import redis_client
 
 logger = logging.getLogger(__name__)
 
-# Configure Gemini
-genai.configure(api_key=settings.GEMINI_API_KEY)
+# Configure Gemini client
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 SYSTEM_PROMPT = """You are a maternal health education assistant serving pregnant women \
 in rural Kenya. Your role is to provide accurate, culturally appropriate antenatal \
@@ -69,19 +69,7 @@ class AIEngine:
     """Conversation engine powered by Google Gemini."""
 
     def __init__(self):
-        self.model = genai.GenerativeModel(
-            model_name=settings.GEMINI_MODEL,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=500,
-                temperature=0.3,
-            ),
-            safety_settings=[
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-            ],
-        )
+        self.model_name = settings.GEMINI_MODEL
 
     async def generate_response(
         self,
@@ -121,7 +109,10 @@ class AIEngine:
 
             full_prompt = "\n\n".join(prompt_parts)
 
-            response = self.model.generate_content(full_prompt)
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=full_prompt,
+            )
 
             if response and response.text:
                 ai_response = response.text.strip()

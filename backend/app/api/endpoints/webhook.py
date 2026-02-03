@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.redis import redis_client
 from app.core.security import verify_whatsapp_signature
 from app.services.conversation_handler import conversation_handler
 from app.services.whatsapp import WhatsAppClient
@@ -18,6 +19,9 @@ from app.services.whatsapp import WhatsAppClient
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
+
+# Message deduplication TTL in seconds (5 minutes)
+MESSAGE_DEDUP_TTL = 300
 
 
 @router.get("")
@@ -66,6 +70,19 @@ async def receive_webhook(
     if message is None:
         # Could be a status update or other non-message event
         return {"status": "ok"}
+
+    # Deduplicate messages - WhatsApp may retry webhook delivery
+    dedup_key = f"msg_dedup:{message.message_id}"
+    try:
+        already_processed = await redis_client.get(dedup_key)
+        if already_processed:
+            logger.info("Skipping duplicate message: %s", message.message_id)
+            return {"status": "ok", "message": "Duplicate message skipped"}
+        # Mark message as being processed
+        await redis_client.set(dedup_key, "1", ex=MESSAGE_DEDUP_TTL)
+    except Exception as e:
+        logger.warning("Redis dedup check failed: %s", str(e))
+        # Continue processing even if dedup fails
 
     # Process message
     try:
