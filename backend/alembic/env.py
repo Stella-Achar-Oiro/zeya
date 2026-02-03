@@ -13,6 +13,7 @@ from app.models.admin import AdminUser  # noqa: F401
 from app.models.assessment import KnowledgeAssessment  # noqa: F401
 from app.models.conversation import Conversation  # noqa: F401
 from app.models.engagement import EngagementMetric  # noqa: F401
+from app.models.health_facility import HealthFacility  # noqa: F401
 from app.models.user import User  # noqa: F401
 
 config = context.config
