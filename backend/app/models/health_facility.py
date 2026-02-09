@@ -42,10 +42,12 @@ class HealthFacility(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     facility_type: Mapped[FacilityType] = mapped_column(
-        Enum(FacilityType), nullable=False
+        Enum(FacilityType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
     )
     facility_level: Mapped[FacilityLevel] = mapped_column(
-        Enum(FacilityLevel), nullable=True
+        Enum(FacilityLevel, values_callable=lambda x: [e.value for e in x]),
+        nullable=True
     )
 
     # Contact information

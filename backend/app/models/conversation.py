@@ -24,7 +24,8 @@ class Conversation(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
     message_direction: Mapped[MessageDirection] = mapped_column(
-        Enum(MessageDirection), nullable=False
+        Enum(MessageDirection, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
     )
     message_text: Mapped[str] = mapped_column(Text, nullable=False)
     gestational_age_at_message: Mapped[int] = mapped_column(Integer, nullable=True)

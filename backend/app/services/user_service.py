@@ -40,15 +40,15 @@ class UserService:
     @staticmethod
     async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
         """Create a new user."""
-        user = User(
-            phone_number=user_data.phone_number,
-            whatsapp_id=user_data.whatsapp_id,
-            name=user_data.name,
-            study_group=user_data.study_group,
-            gestational_age_at_enrollment=user_data.gestational_age_at_enrollment,
-            expected_delivery_date=user_data.expected_delivery_date,
-            language_preference=user_data.language_preference,
-        )
+        data = user_data.model_dump()
+        # Explicitly convert enum to its value
+        if 'study_group' in data:
+            if isinstance(data['study_group'], StudyGroup):
+                data['study_group'] = data['study_group'].value
+            elif isinstance(data['study_group'], str):
+                # Handle case where Pydantic already converted to string enum name
+                data['study_group'] = data['study_group'].lower()
+        user = User(**data)
         db.add(user)
         await db.flush()
         return user

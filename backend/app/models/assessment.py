@@ -24,7 +24,8 @@ class KnowledgeAssessment(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
     assessment_type: Mapped[AssessmentType] = mapped_column(
-        Enum(AssessmentType), nullable=False
+        Enum(AssessmentType, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
     )
     total_score: Mapped[int] = mapped_column(Integer, nullable=False)
     max_score: Mapped[int] = mapped_column(Integer, default=100)

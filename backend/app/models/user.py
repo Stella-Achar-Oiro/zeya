@@ -24,7 +24,9 @@ class User(Base):
     whatsapp_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=True)
     study_group: Mapped[StudyGroup] = mapped_column(
-        Enum(StudyGroup), default=StudyGroup.INTERVENTION, nullable=False
+        Enum(StudyGroup, values_callable=lambda x: [e.value for e in x]),
+        default=StudyGroup.INTERVENTION,
+        nullable=False
     )
     gestational_age_at_enrollment: Mapped[int] = mapped_column(
         Integer, nullable=True

@@ -16,6 +16,8 @@ class UserCreate(BaseModel):
     expected_delivery_date: Optional[date] = None
     language_preference: str = "en"
 
+    model_config = {"use_enum_values": True}
+
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
