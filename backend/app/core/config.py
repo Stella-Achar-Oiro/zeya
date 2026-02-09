@@ -1,5 +1,11 @@
+import logging
+import warnings
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -45,6 +51,34 @@ class Settings(BaseSettings):
         "env_file": ".env",
         "case_sensitive": True,
     }
+
+    @model_validator(mode="after")
+    def validate_required_secrets(self):
+        if self.DEBUG:
+            return self
+
+        missing = []
+        if not self.WHATSAPP_ACCESS_TOKEN:
+            missing.append("WHATSAPP_ACCESS_TOKEN")
+        if not self.WHATSAPP_PHONE_NUMBER_ID:
+            missing.append("WHATSAPP_PHONE_NUMBER_ID")
+        if not self.GEMINI_API_KEY:
+            missing.append("GEMINI_API_KEY")
+
+        if missing:
+            raise ValueError(
+                f"Missing required secrets for production: {', '.join(missing)}. "
+                "Set these in your .env file or set DEBUG=true for development."
+            )
+
+        if self.JWT_SECRET_KEY == "change-me-in-production":
+            warnings.warn(
+                "JWT_SECRET_KEY is using the default value. "
+                "Set a strong random secret in your .env file.",
+                stacklevel=2,
+            )
+
+        return self
 
 
 settings = Settings()

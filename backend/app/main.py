@@ -41,8 +41,8 @@ app = FastAPI(
         "AI-powered WhatsApp chatbot for antenatal education in Migori County, Kenya. "
         "Provides personalized maternal health information based on WHO and Kenya MOH guidelines."
     ),
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
 )
 
 app.state.limiter = limiter

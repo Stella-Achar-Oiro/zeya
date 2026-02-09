@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Pre-commit hook: blocks commits that contain secret files or API key patterns
+
+set -euo pipefail
+
+RED='\033[0;31m'
+NC='\033[0m'
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# 1. Block .env files (allow .env.example)
+ENV_FILES=$(echo "$STAGED_FILES" | grep -E '\.env($|\..*)' | grep -v '\.env\.example$' || true)
+if [ -n "$ENV_FILES" ]; then
+    echo -e "${RED}ERROR: Attempt to commit secret files:${NC}"
+    echo "$ENV_FILES"
+    echo ""
+    echo "Remove them with: git reset HEAD <file>"
+    exit 1
+fi
+
+# 2. Scan staged file contents for common secret patterns
+PATTERNS=(
+    'AIzaSy[0-9A-Za-z_-]{33}'          # Google API key
+    'EAA[a-zA-Z0-9]{50,}'               # Facebook/Meta access token
+    'sk-[a-zA-Z0-9]{20,}'               # OpenAI-style key
+    'ghp_[a-zA-Z0-9]{36}'               # GitHub personal access token
+    'PRIVATE KEY-{5}'                     # Private keys
+)
+
+for pattern in "${PATTERNS[@]}"; do
+    MATCHES=$(git diff --cached -G"$pattern" --name-only || true)
+    if [ -n "$MATCHES" ]; then
+        echo -e "${RED}ERROR: Possible secret/API key detected in:${NC}"
+        echo "$MATCHES"
+        echo "Pattern: $pattern"
+        echo ""
+        echo "If this is intentional (e.g. test fixtures), use: git commit --no-verify"
+        exit 1
+    fi
+done
+
+exit 0

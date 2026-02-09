@@ -1,7 +1,7 @@
 # Zeya - WhatsApp AI Antenatal Education Chatbot
 # Run `make help` to see available commands
 
-.PHONY: help up down restart logs migrate test test-cov build clean reset shell db-shell redis-shell ngrok frontend-dev
+.PHONY: help up down restart logs migrate test test-cov build clean reset shell db-shell redis-shell ngrok frontend-dev install-hooks
 
 # Default target
 help:
@@ -30,6 +30,7 @@ help:
 	@echo "  make redis-shell - Open Redis CLI"
 	@echo "  make ngrok     - Start ngrok tunnel (port 8001)"
 	@echo "  make frontend-dev - Run frontend dev server"
+	@echo "  make install-hooks - Install git pre-commit hooks"
 	@echo ""
 	@echo "URLs:"
 	@echo "  Backend API:  http://localhost:8001/docs"
@@ -100,3 +101,8 @@ ngrok:
 
 frontend-dev:
 	cd frontend && npm install && npm run dev
+
+install-hooks:
+	cp scripts/pre-commit .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+	@echo "✓ Git hooks installed"

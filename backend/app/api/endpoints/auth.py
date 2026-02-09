@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password
-from app.models.admin import AdminUser
+from app.models.admin import AdminRole, AdminUser
 from app.schemas.admin import AdminCreate, AdminLogin, AdminResponse, TokenResponse
+from app.api.dependencies.auth import require_role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -45,8 +46,9 @@ async def login(
 async def register_admin(
     admin_data: AdminCreate,
     db: AsyncSession = Depends(get_db),
+    _admin: AdminUser = Depends(require_role(AdminRole.ADMIN)),
 ) -> AdminUser:
-    """Register a new admin user. Should be restricted in production."""
+    """Register a new admin user. Requires an existing admin."""
     # Check for existing user
     existing = await db.execute(
         select(AdminUser).where(
