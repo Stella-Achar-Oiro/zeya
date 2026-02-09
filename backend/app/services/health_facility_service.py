@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.health_facility import HealthFacility
@@ -29,7 +29,7 @@ class HealthFacilityService:
         self, db: AsyncSession, county: str, active_only: bool = True
     ) -> list[HealthFacility]:
         """Get all health facilities in a county."""
-        query = select(HealthFacility).where(HealthFacility.county == county)
+        query = select(HealthFacility).where(func.lower(HealthFacility.county) == county.lower())
 
         if active_only:
             query = query.where(HealthFacility.is_active == True)
@@ -56,7 +56,7 @@ class HealthFacilityService:
         query = (
             select(HealthFacility)
             .where(
-                HealthFacility.county == county,
+                func.lower(HealthFacility.county) == county.lower(),
                 HealthFacility.is_active == True,
                 HealthFacility.has_emergency_services == True,
                 HealthFacility.is_verified == True,
@@ -82,20 +82,20 @@ class HealthFacilityService:
         query = select(HealthFacility)
 
         if county:
-            query = query.where(HealthFacility.county == county)
+            query = query.where(func.lower(HealthFacility.county) == county.lower())
 
         if active_only:
             query = query.where(HealthFacility.is_active == True)
 
         # Get total count
-        count_query = select(HealthFacility)
+        count_query = select(func.count()).select_from(HealthFacility)
         if county:
-            count_query = count_query.where(HealthFacility.county == county)
+            count_query = count_query.where(func.lower(HealthFacility.county) == county.lower())
         if active_only:
             count_query = count_query.where(HealthFacility.is_active == True)
 
         total_result = await db.execute(count_query)
-        total = len(list(total_result.scalars().all()))
+        total = total_result.scalar() or 0
 
         # Get paginated results
         query = (

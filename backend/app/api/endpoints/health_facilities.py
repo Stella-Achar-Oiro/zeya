@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.auth import get_current_admin
 from app.core.database import get_db
-from app.models.admin import Admin
+from app.models.admin import AdminUser
 from app.schemas.health_facility import (
     EmergencyContactsResponse,
     HealthFacilityCreate,
@@ -31,7 +31,7 @@ async def list_facilities(
     limit: int = Query(100, ge=1, le=500),
     county: Optional[str] = None,
     active_only: bool = Query(True),
-    _admin: Admin = Depends(get_current_admin),
+    _admin: AdminUser = Depends(get_current_admin),
 ) -> HealthFacilityList:
     """
     List all health facilities with pagination.
@@ -55,7 +55,7 @@ async def get_emergency_contacts(
     county: str,
     db: AsyncSession = Depends(get_db),
     language: str = Query("en", regex="^(en|sw)$"),
-    _admin: Admin = Depends(get_current_admin),
+    _admin: AdminUser = Depends(get_current_admin),
 ) -> EmergencyContactsResponse:
     """
     Get emergency contact information for a specific county.
@@ -92,7 +92,7 @@ async def get_emergency_contacts(
 async def get_facility(
     facility_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _admin: Admin = Depends(get_current_admin),
+    _admin: AdminUser = Depends(get_current_admin),
 ) -> HealthFacilityResponse:
     """
     Get a specific health facility by ID.
@@ -113,7 +113,7 @@ async def get_facility(
 async def create_facility(
     facility_data: HealthFacilityCreate,
     db: AsyncSession = Depends(get_db),
-    _admin: Admin = Depends(get_current_admin),
+    _admin: AdminUser = Depends(get_current_admin),
 ) -> HealthFacilityResponse:
     """
     Create a new health facility.
@@ -132,7 +132,7 @@ async def update_facility(
     facility_id: UUID,
     facility_data: HealthFacilityUpdate,
     db: AsyncSession = Depends(get_db),
-    _admin: Admin = Depends(get_current_admin),
+    _admin: AdminUser = Depends(get_current_admin),
 ) -> HealthFacilityResponse:
     """
     Update a health facility.
@@ -158,7 +158,7 @@ async def delete_facility(
     facility_id: UUID,
     hard_delete: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    _admin: Admin = Depends(get_current_admin),
+    _admin: AdminUser = Depends(get_current_admin),
 ) -> None:
     """
     Delete a health facility.
