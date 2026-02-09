@@ -31,3 +31,8 @@ async def get_db() -> AsyncSession:
             raise
         finally:
             await session.close()
+
+
+def get_db_session():
+    """Get a database session context manager for CLI commands."""
+    return async_session_factory()

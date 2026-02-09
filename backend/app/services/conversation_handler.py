@@ -110,8 +110,11 @@ class ConversationHandler:
 
         # Generate response
         if danger_result.detected:
-            # Send emergency response immediately
-            emergency_msg = get_emergency_response(user.language_preference)
+            # Send emergency response immediately with database facility lookup
+            # Default to Migori County - can be extended to support user location
+            emergency_msg = await get_emergency_response(
+                db=db, county="Migori", language=user.language_preference
+            )
             await whatsapp_client.send_text_message(user.phone_number, emergency_msg)
 
             # Also get AI response for additional context
