@@ -23,3 +23,18 @@ def node_source(name: str) -> str:
 @pytest.fixture
 def danger_gate_source() -> str:
     return node_source("danger_gate")
+
+
+def module_constant(relative_path: str, name: str):
+    """Read a literal module-level constant from a backend file without importing it.
+
+    Used for modules such as ai_engine.py and conversation_handler.py whose imports
+    need API clients and Redis.
+    """
+    import ast
+
+    tree = ast.parse((BACKEND / relative_path).read_text())
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            return ast.literal_eval(node.value)
+    raise KeyError(name)

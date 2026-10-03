@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import time
+import types
 from typing import Any
 
 from RestrictedPython import (
@@ -135,8 +136,15 @@ def make_executor(code: str):
 class NodeHarness:
     """Executes one node's source with CodeNode-equivalent helpers and records effects."""
 
-    def __init__(self, code: str, temp_state: dict | None = None, participant_data: dict | None = None):
+    def __init__(
+        self,
+        code: str,
+        temp_state: dict | None = None,
+        participant_data: dict | None = None,
+        now: datetime.datetime | None = None,
+    ):
         self.executor = make_executor(code)
+        self.now = now
         self.temp_state: dict[str, Any] = dict(temp_state or {})
         self.participant_data: dict[str, Any] = dict(participant_data or {})
         self.message_tags: list[str] = []
@@ -157,7 +165,7 @@ class NodeHarness:
         def set_participant_data_key(key_name, value):
             self.participant_data[key_name] = value
 
-        return {
+        helpers = {
             "get_temp_state_key": get_temp_state_key,
             "set_temp_state_key": set_temp_state_key,
             "get_participant_data": get_participant_data,
@@ -165,7 +173,28 @@ class NodeHarness:
             "add_message_tag": self.message_tags.append,
             "add_session_tag": self.session_tags.append,
         }
+        if self.now is not None:
+            # OCS exposes the datetime module as a global; replacing it freezes the clock.
+            helpers["datetime"] = frozen_datetime_module(self.now)
+        return helpers
 
     def run(self, input: str) -> str:  # noqa: A002 - mirrors the OCS argument name
         self.temp_state.setdefault("user_input", input)
         return str(self.executor.compile_and_execute_code(self._globals(), input=input, node_inputs=[input]))
+
+
+def frozen_datetime_module(now: datetime.datetime):
+    """A stand-in for the ``datetime`` module whose ``datetime.now()`` returns ``now``."""
+
+    class FrozenDatetime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            frozen = cls.fromtimestamp(now.timestamp(), tz=datetime.UTC)
+            return frozen.astimezone(tz) if tz else frozen.replace(tzinfo=None)
+
+    return types.SimpleNamespace(
+        datetime=FrozenDatetime,
+        date=datetime.date,
+        timedelta=datetime.timedelta,
+        timezone=datetime.timezone,
+    )

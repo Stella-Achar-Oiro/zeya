@@ -11,7 +11,7 @@ NODE_FILES = sorted(p for p in NODES.glob("*.py") if p.name != "__init__.py")
 
 
 def test_expected_nodes_exist():
-    assert {p.stem for p in NODE_FILES} >= {"danger_gate", "emergency_response"}
+    assert {p.stem for p in NODE_FILES} >= {"danger_gate", "emergency_response", "registration"}
 
 
 @pytest.mark.parametrize("path", NODE_FILES, ids=lambda p: p.stem)
