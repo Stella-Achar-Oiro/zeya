@@ -144,6 +144,13 @@ def test_system_prompt_is_zeya_prompt():
     assert SYSTEM_PROMPT_FILE.read_text() == module_constant("app/services/ai_engine.py", "SYSTEM_PROMPT")
 
 
+def test_system_prompt_has_no_template_braces():
+    # OCS formats the prompt as a template: a stray "{" or "}" fails at run time, and a
+    # "{name}" would be read as a variable.
+    prompt = SYSTEM_PROMPT_FILE.read_text()
+    assert "{" not in prompt and "}" not in prompt
+
+
 def test_llm_node_config(graph):
     nodes, _ = graph
     params = _by_name(nodes, "llm")["data"]["params"]
