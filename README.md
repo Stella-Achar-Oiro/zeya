@@ -87,6 +87,12 @@ make shell     - Open backend shell
 make db-shell  - Open PostgreSQL shell
 ```
 
+## Open Chat Studio migration
+
+Zeya is moving onto Open Chat Studio. The design, decisions and study-log items are in
+[docs/ocs-migration.md](docs/ocs-migration.md). The pipeline nodes (including the danger-sign gate),
+build script, export adapter and tests are in [ocs/](ocs/). Run them with `make test-ocs`.
+
 ## WhatsApp Integration
 
 1. Start ngrok tunnel:
