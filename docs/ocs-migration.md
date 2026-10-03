@@ -8,6 +8,9 @@ OCS reference commit `7df40d8a4`
 > placeholders. The emergency message sends them as they are, as Zeya does today.
 > Verify them with Migori County Health before go-live.
 > `test_facility_numbers_are_not_placeholders` is a strict xfail until then.
+> The node is checked against the **seed file**, not the live `health_facilities`
+> table, which admins can edit. Compare the node with production's table at the
+> same time.
 
 ## Summary
 
@@ -121,14 +124,25 @@ Reasoning: the emergency path should have no runtime dependency (database, HTTP,
 participant-data lookup) that could fail. A participant-data copy would go stale for
 people already enrolled. Changes to facility contacts go through code review.
 
+The tests only prove the node matches the seed file. Production's table may have been
+edited through the admin API since seeding. Before go-live, compare the node with
+`SELECT name, phone_number, emergency_line FROM health_facilities WHERE is_active AND
+has_emergency_services AND is_verified AND lower(county) = 'migori' ORDER BY
+display_priority, name LIMIT 5`, and update the seed file and the node if they differ.
+
 ## LLM provider
 
 **Decision: add a Google Gemini provider on the instance, using the existing Zeya
 key, and keep `gemini-3-flash-preview`. Do not switch to "Evarest OpenAI".**
 
-- Zeya has run `gemini-3-flash-preview` since commit `70212c9` (2026-02-09), not
-  `gemini-2.0-flash-exp` as the README says. `conversations.ai_model_used` records the
-  model per message. Analysis should already treat 2026-02-09 as a model change point.
+- The config default became `gemini-3-flash-preview` in commit `70212c9` (2026-02-09).
+  The README still says `gemini-2.0-flash-exp`. That date is when the default changed,
+  not proof of what production ran: deployments read `GEMINI_MODEL` from their own
+  `.env`. **Check production before relying on it:** `SELECT ai_model_used,
+  min(created_at), max(created_at), count(*) FROM conversations WHERE
+  message_direction = 'outgoing' GROUP BY 1 ORDER BY 2`. A local development database
+  holds only test rows (all `gemini-3-flash-preview`, 2026-02-09), so it cannot confirm
+  this.
 - Switching provider partway through the study changes model family, Swahili quality,
   length and tone. That is a much larger methodological change than staying on Gemini.
 - OCS lists `gemini-2.5-*` for the `google` provider, not `gemini-3-flash-preview`.
@@ -152,7 +166,19 @@ key, and keep `gemini-3-flash-preview`. Do not switch to "Evarest OpenAI".**
    used for the removed follow-up.
 4. **Declined consent.** Zeya deactivated the user and ignored them afterwards. Now
    `consent_declined` is recorded and the next message gets the consent question again,
-   with the same wording as before. Their rows are excluded from the export.
+   with the same wording as before. It is cleared if they later say YES.
+5. **People who never consented are left out of the export.** Zeya's export kept their
+   logged messages, such as consent-step replies from people who then declined. The
+   adapter drops every row for participants whose latest data lacks
+   `consent_given: true`.
+6. **`response_time_ms` is measured differently.** Zeya timed from webhook processing
+   to after both WhatsApp sends, so it included WhatsApp API latency and, on danger
+   turns, the follow-up Gemini call. OCS-era values are the gap between the stored
+   human and AI message timestamps, so the two eras are not directly comparable.
+7. **Messages with no text.** Zeya ignored them (`if not message.text: return`). In
+   OCS they reach the pipeline: an empty message at the name step asks for the name
+   again, and voice notes may be transcribed by OCS and then gated like any text.
+   Check the channel's media settings at deploy time.
 
 ## Study data continuity
 
@@ -165,10 +191,13 @@ key, and keep `gemini-3-flash-preview`. Do not switch to "Evarest OpenAI".**
     alphabetically. Whitespace inside a keyword is collapsed and the tag is capped at
     100 characters (the OCS tag limit).
   - `gestational_age` is the age at message time.
-  - `response_time_ms` is the AI time minus the human time.
+  - `response_time_ms` is the AI time minus the human time (see change 6). Each reply is
+    paired with the human message just before it in the same session. The export's
+    `Trace ID` is not used, because OCS leaves it blank unless an external tracing
+    provider is configured.
   - It drops what Zeya never logged: the first-contact turn, and registration replies.
     Registration answers are kept.
-  - It drops participants who never consented.
+  - It drops participants who never consented (see change 5).
   - `study_id` uses Zeya's `STUDY_####` numbering, linked by `whatsapp_id`. OCS-only
     participants sort after every Zeya UUID, so existing IDs are unchanged. As in Zeya,
     numbering is over the unfiltered set.
@@ -185,7 +214,7 @@ key, and keep `gemini-3-flash-preview`. Do not switch to "Evarest OpenAI".**
 | Unit (real OCS sandbox) | `OCS_SOURCE=<checkout> make test-ocs` | the same, run in OCS's `RestrictedPythonExecutionMixin` |
 | Engine | `DATABASE_URL=… make test-ocs-engine OCS_SOURCE=<checkout>` | pipeline validates; 16 danger messages → emergency with 0 LLM calls; SAFE → exactly one LLM call with the Zeya prompt and context; drift check passes on what OCS stores |
 
-At the time of writing: 274 passed + 1 strict xfail (the placeholder numbers), in
+At the time of writing: 283 passed + 1 strict xfail (the placeholder numbers), in
 both sandbox modes; 26 passed in the engine suite against a throwaway
 `pgvector/pgvector:pg16` database. Install with `pip install -r ocs/requirements-dev.txt`.
 
@@ -198,7 +227,9 @@ both sandbox modes; 26 passed in the engine suite against a throwaway
    `python -m ocs.build_pipeline --llm-provider-id N --llm-provider-model-id M > deploy.json`.
    Load it into the pipeline (`POST /a/evarest/pipelines/data/<id>/`). Publish a version.
 4. Import `seed_participants.py` output. Test on the web channel with the corpus in
-   `ocs/tests/danger_corpus.py`. Run `check_drift`.
+   `ocs/tests/danger_corpus.py`. Run
+   `python -m ocs.check_drift live.json --llm-provider-id N --llm-provider-model-id M`.
+   The expected ids are required, so a model switched in the UI shows up as drift.
 5. Move the WhatsApp number to OCS and switch Zeya's webhook off at the same time.
    Record the date in the study log with the methodological changes above. Keep the
    Zeya backend up for export only.
