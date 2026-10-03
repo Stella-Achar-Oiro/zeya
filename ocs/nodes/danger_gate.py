@@ -99,9 +99,11 @@ def main(input: str, **kwargs) -> str:
 
     # Tags carry the detection into the OCS transcript export (see ocs/export_adapter.py).
     # OCS tag names are limited to 100 characters.
+    # Keyword tags carry the category because OCS exports tags in alphabetical order.
     for category in categories_found:
         add_message_tag("danger_sign:" + category)
-    for keyword in keywords_found:
-        add_message_tag(("danger_keyword:" + " ".join(keyword.split()))[:100])
+    for index in range(len(keywords_found)):
+        keyword = " ".join(keywords_found[index].split())
+        add_message_tag(("danger_keyword:" + categories_found[index] + ":" + keyword)[:100])
 
     return input
