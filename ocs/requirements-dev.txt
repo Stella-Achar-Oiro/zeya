@@ -5,3 +5,6 @@ ruff>=0.6
 # backend/app/services/danger_signs.py imports these at module level.
 sqlalchemy>=2.0.27,<3.0.0
 greenlet
+# The emergency-response parity test imports the facility model and seed data.
+pydantic-settings>=2.1.0,<3.0.0
+asyncpg>=0.29.0,<1.0.0
