@@ -1,169 +1,204 @@
 # Migrating Zeya onto Open Chat Studio
 
-Status: proposed · Target: `https://openchatstudio.co.ke/` (team `evarest`) · OCS reference commit `7df40d8a4`
+Status: implemented, not deployed · Target: `https://openchatstudio.co.ke/` (team `evarest`) ·
+OCS reference commit `7df40d8a4`
+
+> **Go-live blocker:** the seed phone numbers for 4 of the 5 emergency facilities
+> (`0722 123 456`, `0733 456 789`, `0744 567 890`, `0755 678 901`) look like
+> placeholders. The emergency message sends them as they are, as Zeya does today.
+> Verify them with Migori County Health before go-live.
+> `test_facility_numbers_are_not_placeholders` is a strict xfail until then.
 
 ## Summary
 
-OCS takes over the WhatsApp channel, sessions/history, LLM calls, participants and
+OCS takes over the WhatsApp channel, sessions and history, LLM calls, participants and
 admin. Zeya keeps, **in this repository**, the safety-critical and study-critical code:
 the danger-sign gate, the emergency message with Migori facility contacts, the
-registration flow, and the CSV export adapter. These are written as OCS Python-node
-sources under `ocs/`, tested here against the real OCS sandbox, and assembled into a
-pipeline file by a build script. People do not hand-edit the pipeline in the UI.
+registration flow, and the export adapter. These are written as OCS Python-node
+sources under `ocs/nodes/`, tested here against the real OCS sandbox and engine, and
+assembled into `ocs/pipeline/zeya_pipeline.json` by `ocs/build_pipeline.py`.
 
 ```
-Start → danger_gate (Python) → danger_router (Static Router, temp_state.danger_route)
-          ├─ EMERGENCY (default) → emergency_response (Python, no LLM) → End
-          └─ SAFE → registration (Python) → registration_router (Static Router, temp_state.registration_route)
-                       ├─ REPLY (default) → End
-                       └─ REGISTERED → llm (LLM, Gemini) → End
+Start → danger_gate (Python) → danger_router (Static Router on temp_state.danger_route)
+          ├─ output_0 EMERGENCY (default) → emergency_response (Python, no LLM) → End
+          └─ output_1 SAFE → registration (Python) → registration_router (Static Router on temp_state.registration_route)
+                                ├─ output_0 REPLY (default) → End
+                                └─ output_1 REGISTERED → llm (LLM, Gemini) → End
 ```
+
+**Why not `CodeNode → BooleanNode`, as first sketched.** `BooleanNode` is
+`@deprecated_node` (`can_add=False`), so it cannot be added in the UI. Also, every OCS
+router passes its *input* downstream (`from_router_output(..., state["last_node_input"])`).
+So if the gate returned the category, the LLM would receive `"none"` instead of the
+user's message. Instead, the gate returns the message unchanged and writes
+`danger_route` to temp state. A `StaticRouterNode` routes on that value.
 
 ## What moves, what stays
 
 | Zeya today | After migration |
 |---|---|
-| `whatsapp.py`, `webhook.py` | OCS WhatsApp channel |
+| `whatsapp.py`, `webhook.py` | OCS WhatsApp channel (participant identifier = Meta `wa_id` = Zeya `whatsapp_id`) |
 | `conversation_handler.py` orchestration | the pipeline above |
-| `conversation_handler.py` registration steps | `ocs/nodes/registration.py` (Python node) |
-| `ai_engine.py` | OCS LLM node; prompt copied verbatim into `ocs/prompts/system_prompt.txt` |
-| Redis history (6 turns, 24 h) | OCS node history, capped at 12 messages (6 turns); see changes below |
-| `user_service.py`, `users.py` | OCS participants + participant data |
+| `conversation_handler.py` registration steps | `ocs/nodes/registration.py` |
+| `ai_engine.py` | OCS LLM node. Prompt copied verbatim to `ocs/prompts/system_prompt.txt`; `_build_context` ported into the registration node |
+| Redis history (6 turns, 24 h) | OCS node history, `max_history_length` 12 messages |
+| `user_service.py`, `users.py` | OCS participants + participant data (same field names as the `users` columns) |
 | `analytics_service.py`, React dashboard | OCS dashboard; `ocs/export_adapter.py` reproduces the analysis CSV |
 | `danger_signs.py` | `ocs/nodes/danger_gate.py`, **patterns unchanged** |
-| `health_facility_service.py` + DB table | static table built into `ocs/nodes/emergency_response.py` from `app/seeds/health_facilities.py` |
+| `health_facility_service.py` + table | static table built into `ocs/nodes/emergency_response.py`, checked against `app/seeds/health_facilities.py` |
 | Zeya Postgres (existing transcripts) | **stays**, read-only, until the study closes |
 
 ## The danger-sign gate (the four hard rules)
 
-1. **Deterministic regex.** `danger_gate.py` holds the same 39 patterns as
+1. **Deterministic regex.** `danger_gate.py` contains the same 39 patterns as
    `danger_signs.py`, in the same order, with the same flags. It uses the same
-   first-match-per-category loop. No LLM node appears before the router.
-2. **Runs before the LLM.** It is the only node after Start, and the LLM is reachable
-   only through the router's `SAFE` handle. Every message is gated, including
-   registration messages. `EMERGENCY` is the router's *default* route, so a missing or
-   unexpected value fails toward the emergency message, not the LLM. If the gate itself
-   raises, the pipeline stops with an error and no LLM node runs.
-3. **Not editable by non-engineers.** OCS cannot lock a single node. Pipeline edit
-   rights come from the *Chatbot Admin* group (`pipelines: ALL`,
-   `apps/teams/backends.py`). Study staff get *Chat Viewer* + *Annotation Reviewer*
-   only. Engineers deploy the generated `ocs/build/pipeline.json` and never edit nodes
-   in the UI. `ocs/check_drift.py` compares the live pipeline's node code with the
-   repository and fails on any difference. Run it after every deploy and on a schedule.
-   This is an operational control, not a technical lock, and is recorded as a residual
-   risk.
-4. **Version-controlled with tests.** The node source is a normal `.py` file here.
-   `ocs/tests/test_danger_gate_parity.py` imports both the original module and the node.
-   It asserts they return identical categories and keywords for every existing test
-   message, a positive example for every individual pattern (39), and the negative
-   corpus. All 8 categories are covered in English **and** Swahili.
+   first-match-per-category loop. No LLM node is before the router.
+2. **Runs before the LLM.** It is the only node after Start, and the LLM can only be
+   reached through the router's `SAFE` handle. Every message is gated, including
+   registration messages. `EMERGENCY` is the router's default route, so a missing or
+   unexpected value goes to the emergency message, not the LLM. If the gate raises,
+   OCS stops the pipeline (`CodeNodeRunError`) and no LLM node runs.
+3. **Not editable by non-engineers.** OCS has no per-node lock. Pipeline edit rights
+   come from the *Chatbot Admin* group (`pipelines: ALL`, `apps/teams/backends.py`).
+   Study staff get *Chat Viewer* + *Annotation Reviewer* only. Engineers deploy the
+   generated JSON and never edit nodes in the UI. `python -m ocs.check_drift live.json`
+   compares the live pipeline with the repository: node set, edges, all Python code,
+   router settings, prompt and model parameters. It exits 1 on any difference. Run it
+   after every deploy and on a schedule. This is an operational control, not a
+   technical lock, and remains a residual risk.
+4. **Version-controlled with tests.** The node source is a normal `.py` file. The
+   parity tests compare each pattern's string and flags with the original. They also
+   prove each of the 39 patterns individually and assert identical categories and
+   keywords for every test message, both languages, the negatives and the edge cases.
 
-### Changes needed to fit the Python-node constraint (structure only)
+### What changed to fit the Python-node constraint (structure only)
 
 OCS runs node code with `exec(code, globals, locals)`. Module-level names land in
-`locals`, so `main` cannot see them (verified against `python_execution.py`). So:
+`locals`, so `main` cannot see them (verified in both the pinned and real sandbox).
 
 - `import re` and the pattern table moved **inside** `main`.
-- The table is a list of `(category, [patterns])` pairs instead of a `dict`. Iteration
-  order is the same (dicts preserve insertion order). `bleeding` is still checked first.
-- `DangerSignResult` became plain values written to temp state
-  (`danger_categories`, `danger_keywords`).
+- The table is a list of `(category, [patterns])` pairs instead of a `dict`, in the
+  same order.
+- `DangerSignResult` became temp-state values: `danger_route`, `danger_categories`,
+  `danger_keywords`.
+- The pattern block was generated mechanically from the original source lines, not
+  retyped.
 
-**No pattern string, flag or match rule changed.** The parity test compares each
-compiled pattern's `.pattern` and `.flags` with the original. It fails if either
-side drifts.
+**No pattern string, flag or match rule changed.**
+
+Also found: the sandbox has no `_unpack_sequence_`, so `a, b = ...` fails at run time
+inside a node. `for a, b in ...` works. The nodes avoid it, and a test pins the
+constraint.
+
+### Gaps in the existing patterns (not changed; needs clinical review)
+
+Porting verbatim keeps these existing misses. The tests record them as edge cases:
+
+- `blurred?` matches "blurre"/"blurred", not "blur" or "blurry".
+- `\bconvulsion\b` and `\bseizure\b` miss the plurals "convulsions" and "seizures".
+- `stopped?` and `passed?` miss "stop moving" and "pass out".
+
+Fixing them changes matching behaviour. It should be a separate, clinically reviewed
+change made to `danger_signs.py` and the node together. The parity tests enforce that
+both change together.
 
 ### No LLM on the emergency path
 
-`emergency_response` is a Python node with no LLM call. The route test parses the
-generated pipeline. It asserts that no node reachable from `EMERGENCY` is an LLM-type
-node, and that every LLM node is reachable only through `SAFE`.
+`emergency_response` is a Python node with no LLM. The structural tests read the
+generated pipeline as a graph. They assert that no LLM-type node is reachable from
+`EMERGENCY` and that, with the `SAFE` edge removed, no LLM node is reachable from Start.
+The engine test runs all 8 categories × {en, sw} through OCS's real `PipelineGraph` with
+a recording fake LLM and asserts zero LLM calls.
 
 ## Health facilities
 
-The node has a **static table built in at build time**, generated from
-`app/seeds/health_facilities.py`: verified, active, emergency-capable facilities sorted
-by `display_priority`, top 5. This is the same filter as `get_emergency_facilities`.
+The node holds a **static table built in at build time**: the top 5 verified, active,
+emergency-capable Migori facilities by `display_priority`. This is the same filter as
+`get_emergency_facilities`. The test rebuilds Zeya's message from the seed data with
+`format_emergency_message` and requires byte-for-byte equality in both languages.
 
-Reasoning: the emergency path should have no runtime dependency (no database, no HTTP,
-no participant-data lookup) that could fail. A participant-data copy would go stale for
-people already enrolled. Changes to facilities go through code review, which suits
-contact numbers that people rely on in an emergency. Today's fallback text is kept only
-as a test fixture.
+Reasoning: the emergency path should have no runtime dependency (database, HTTP,
+participant-data lookup) that could fail. A participant-data copy would go stale for
+people already enrolled. Changes to facility contacts go through code review.
 
 ## LLM provider
 
-**Decision: add a Google Gemini provider on the instance, using the existing Zeya API
+**Decision: add a Google Gemini provider on the instance, using the existing Zeya
 key, and keep `gemini-3-flash-preview`. Do not switch to "Evarest OpenAI".**
 
-- Zeya has used `gemini-3-flash-preview` since commit `70212c9` (2026-02-09), not
-  `gemini-2.0-flash-exp` as the README says. Earlier rows have the older model in
-  `conversations.ai_model_used`. Analysis should already treat 2026-02-09 as a model
-  change point.
-- Switching providers would be a second, larger change partway through the study:
-  different model family, different Swahili quality, different length and tone. That
-  hurts comparability with the data already collected. Keeping the model means the
-  remaining differences are only in how the prompt is assembled (below).
+- Zeya has run `gemini-3-flash-preview` since commit `70212c9` (2026-02-09), not
+  `gemini-2.0-flash-exp` as the README says. `conversations.ai_model_used` records the
+  model per message. Analysis should already treat 2026-02-09 as a model change point.
+- Switching provider partway through the study changes model family, Swahili quality,
+  length and tone. That is a much larger methodological change than staying on Gemini.
 - OCS lists `gemini-2.5-*` for the `google` provider, not `gemini-3-flash-preview`.
-  Add it as a custom model on the provider. If the instance refuses, use
-  `gemini-2.5-flash` and record it as a model change point in the study log.
+  Add it as a custom model. If that is impossible, use `gemini-2.5-flash` and record a
+  model change point.
+- **Temperature is pinned to 1.0.** Zeya called Gemini with no generation config, so it
+  used the model default (1.0 for Gemini 3). OCS would otherwise default to 0.7.
+  Confirm the default for the exact model at deploy time.
 
-## Methodological changes (for the study log)
+## Methodological changes (for the study log, with go-live date)
 
-These follow from the four hard rules or from OCS, and must be recorded with their
-go-live date:
-
-1. **No AI follow-up after an emergency message.** Today Zeya sends the emergency
-   template, then a second Gemini reply. Rule 2 and the no-LLM emergency path remove the
-   second reply. Danger-sign turns now get only the template.
-2. **Danger signs are checked during registration and for people who declined.**
-   Today those messages bypass detection. Now someone who types "bleeding" while
-   registering gets the emergency message.
-3. **Prompt assembly.** The system prompt, gestational-age guidance and Swahili or
-   danger-sign context lines are copied verbatim. OCS sends history as chat turns, not
-   as an inline "Recent conversation history" block. History length is 6 turns
-   (12 messages). There is no 24-hour expiry; OCS sessions persist.
-4. **Declined consent.** Today later messages are ignored without logging. Now they get
-   a one-line reply saying YES re-enrols. The welcome text already promises this, but
-   the old code never allowed it. Their messages are excluded from the export (below).
+1. **No AI follow-up after an emergency message.** Zeya sends the template and then a
+   second Gemini reply. The no-LLM emergency path removes the second reply, and those
+   turns no longer enter LLM history.
+2. **Danger signs are checked during registration.** Previously those messages skipped
+   detection.
+3. **Prompt assembly.** The system prompt, gestational-age guidance and Swahili context
+   line are verbatim. History is sent as chat turns instead of an inline "Recent
+   conversation history" block. It is still capped at 6 turns, with no 24-hour expiry.
+   The "ALERT: Danger sign keywords detected" context line is gone, because it was only
+   used for the removed follow-up.
+4. **Declined consent.** Zeya deactivated the user and ignored them afterwards. Now
+   `consent_declined` is recorded and the next message gets the consent question again,
+   with the same wording as before. Their rows are excluded from the export.
 
 ## Study data continuity
 
 - **Existing transcripts are not migrated.** The Zeya database and
-  `/api/v1/analytics/export/*` stay running, read-only, until the study closes. Nothing
-  existing becomes unexportable.
-- **New transcripts:** `ocs/export_adapter.py` turns the OCS chatbot transcript export
-  into Zeya's exact `conversations_export.csv` columns (`study_id, study_group,
-  direction, message_text, gestational_age, danger_sign, danger_keywords,
-  response_time_ms, timestamp`):
-  - `danger_sign` and `danger_keywords` come from message tags (`danger_sign:<category>`)
-    and a `danger_keywords` tag that the gate writes.
-  - `gestational_age` comes from the participant-data snapshot (`gestational_age_weeks`).
-  - `response_time_ms` = AI message time − human message time.
-  - `study_id` uses the same `STUDY_####` scheme over a combined set, with OCS
-    participants linked to Zeya users by phone number.
-  - Rows for participants without `consent_given` are dropped.
-- Migrated participants are seeded into OCS participant data (consent, name, enrolment
-  gestational age and date, study group, language) by `ocs/seed_participants.py`, so
-  they skip registration again.
+  `/api/v1/analytics/export/*` stay running, read-only, until the study closes.
+- **New transcripts:** `ocs/export_adapter.py` converts the OCS export to Zeya's exact
+  9 columns and value formats:
+  - Danger flags and keywords go on the outgoing row only, from gate tags. Keywords are
+    in Zeya's category order; the tag holds the category because OCS exports tags
+    alphabetically. Whitespace inside a keyword is collapsed and the tag is capped at
+    100 characters (the OCS tag limit).
+  - `gestational_age` is the age at message time.
+  - `response_time_ms` is the AI time minus the human time.
+  - It drops what Zeya never logged: the first-contact turn, and registration replies.
+    Registration answers are kept.
+  - It drops participants who never consented.
+  - `study_id` uses Zeya's `STUDY_####` numbering, linked by `whatsapp_id`. OCS-only
+    participants sort after every Zeya UUID, so existing IDs are unchanged. As in Zeya,
+    numbering is over the unfiltered set.
+- `ocs/seed_participants.py` imports existing users into OCS participant data, so they
+  skip registration. It leaves out consented users whom an admin deactivated and lists
+  them for a study-team decision. OCS exposes `participant.name` as `name`, so
+  registration tracks the name step with `name_collected`.
 
 ## Testing
 
-All tests live in `ocs/tests/` and run with `make test-ocs`. They use the real OCS
-`RestrictedPythonExecutionMixin` when `OCS_SOURCE` is set, and a pinned copy of it
-otherwise.
+| Suite | Command | What it proves |
+|---|---|---|
+| Unit (pinned sandbox) | `make test-ocs` | parity, per-pattern, bilingual routing, registration, emergency text, graph structure, export, drift, seeding |
+| Unit (real OCS sandbox) | `OCS_SOURCE=<checkout> make test-ocs` | the same, run in OCS's `RestrictedPythonExecutionMixin` |
+| Engine | `DATABASE_URL=… make test-ocs-engine OCS_SOURCE=<checkout>` | pipeline validates; 16 danger messages → emergency with 0 LLM calls; SAFE → exactly one LLM call with the Zeya prompt and context; drift check passes on what OCS stores |
 
-- Gate parity with `danger_signs.py`, as above.
-- Gate behaviour inside the sandbox: the route value, temp state and tags for all 8
-  categories × {en, sw}, plus negatives.
-- Pipeline structure: emergency path has no LLM; LLM is only behind `SAFE`; `EMERGENCY`
-  is the default route; generated node code matches the files in the repository.
-- Registration state machine, emergency message content (facilities present, both
-  languages), export adapter columns.
+At the time of writing: 274 passed + 1 strict xfail (the placeholder numbers), in
+both sandbox modes; 26 passed in the engine suite against a throwaway
+`pgvector/pgvector:pg16` database. Install with `pip install -r ocs/requirements-dev.txt`.
 
 ## Rollout
 
-Deploy the pipeline to a new OCS chatbot. Test it on the web channel with the test
-corpus, then attach the WhatsApp number. Run `check_drift.py`. Zeya's webhook is
-switched off at the same time the number moves. The Zeya backend stays up for export
-only.
+1. Verify the facility numbers (blocker above).
+2. On the instance: add the Gemini provider and the `gemini-3-flash-preview` custom
+   model. Create the chatbot and pipeline. Restrict roles as in rule 3.
+3. Build with the instance's ids:
+   `python -m ocs.build_pipeline --llm-provider-id N --llm-provider-model-id M > deploy.json`.
+   Load it into the pipeline (`POST /a/evarest/pipelines/data/<id>/`). Publish a version.
+4. Import `seed_participants.py` output. Test on the web channel with the corpus in
+   `ocs/tests/danger_corpus.py`. Run `check_drift`.
+5. Move the WhatsApp number to OCS and switch Zeya's webhook off at the same time.
+   Record the date in the study log with the methodological changes above. Keep the
+   Zeya backend up for export only.
