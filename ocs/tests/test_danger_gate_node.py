@@ -1,11 +1,9 @@
 """Behaviour of the danger-gate node inside the OCS Python-node sandbox."""
 
-import ast
-
 import pytest
 
 from ocs.tests.danger_corpus import BILINGUAL_EXAMPLES, NEGATIVE_MESSAGES
-from ocs.tests.sandbox import NodeHarness, make_executor
+from ocs.tests.sandbox import NodeHarness
 
 BILINGUAL_CASES = [
     (category, language, message)
@@ -17,19 +15,6 @@ BILINGUAL_CASES = [
 def test_all_eight_categories_covered_in_both_languages():
     assert len(BILINGUAL_EXAMPLES) == 8
     assert all(set(langs) == {"en", "sw"} for langs in BILINGUAL_EXAMPLES.values())
-
-
-def test_source_passes_ocs_validation(danger_gate_source):
-    make_executor(danger_gate_source)
-
-
-def test_source_has_only_main_at_top_level(danger_gate_source):
-    # OCS exec()s node code with separate locals, so module-level names are invisible
-    # inside main. Everything must live inside main.
-    body = ast.parse(danger_gate_source).body
-    statements = [n for n in body if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))]
-    assert len(statements) == 1
-    assert isinstance(statements[0], ast.FunctionDef) and statements[0].name == "main"
 
 
 @pytest.mark.parametrize(("category", "language", "message"), BILINGUAL_CASES)

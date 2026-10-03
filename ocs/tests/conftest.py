@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -6,6 +7,9 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BACKEND = REPO_ROOT / "backend"
 NODES = REPO_ROOT / "ocs" / "nodes"
+
+# Lets backend modules import app.core.config without production secrets.
+os.environ.setdefault("DEBUG", "true")
 
 for path in (REPO_ROOT, BACKEND):
     if str(path) not in sys.path:
