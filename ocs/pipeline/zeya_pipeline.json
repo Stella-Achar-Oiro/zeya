@@ -1,0 +1,228 @@
+{
+  "name": "Zeya antenatal education",
+  "data": {
+    "nodes": [
+      {
+        "id": "start",
+        "type": "startNode",
+        "position": {
+          "x": 0,
+          "y": 200
+        },
+        "data": {
+          "id": "start",
+          "type": "StartNode",
+          "label": "",
+          "params": {
+            "name": "start"
+          }
+        }
+      },
+      {
+        "id": "danger_gate",
+        "type": "pipelineNode",
+        "position": {
+          "x": 300,
+          "y": 200
+        },
+        "data": {
+          "id": "danger_gate",
+          "type": "CodeNode",
+          "label": "",
+          "params": {
+            "name": "danger_gate",
+            "code": "\"\"\"\nOpen Chat Studio Python node: deterministic obstetric danger-sign gate.\n\nSource of truth for the first node after Start in the Zeya pipeline. Do not edit\nthis node in the OCS UI; change this file, run ``make test-ocs`` and redeploy\n(see docs/ocs-migration.md).\n\nThe patterns are verbatim copies of DANGER_SIGN_PATTERNS in\nbackend/app/services/danger_signs.py, enforced by ocs/tests/test_danger_gate_parity.py.\nThey live inside ``main`` because OCS executes node code with separate locals, so\nmodule-level names are not visible to ``main``.\n\nOutputs (temp state):\n    danger_route: \"EMERGENCY\" or \"SAFE\", read by the Static Router that follows.\n    danger_categories: matched categories, in detection order.\n    danger_keywords: the matched text, one per category.\nReturns the user's message unchanged so the SAFE branch receives it.\n\"\"\"\n\n\ndef main(input: str, **kwargs) -> str:\n    import re\n\n    # Danger sign keyword patterns grouped by category.\n    # Each pattern is compiled as case-insensitive regex.\n    danger_sign_patterns = [\n        (\"bleeding\", [\n            re.compile(r\"\\b(heavy\\s+)?bleeding\\b\", re.IGNORECASE),\n            re.compile(r\"\\bexcessive\\s+blood\\b\", re.IGNORECASE),\n            re.compile(r\"\\bblood\\s+(clots?|loss)\\b\", re.IGNORECASE),\n            re.compile(r\"\\bkutoka\\s+damu\\b\", re.IGNORECASE),  # Swahili: bleeding\n            re.compile(r\"\\bdamu\\s+nyingi\\b\", re.IGNORECASE),  # Swahili: heavy blood\n        ]),\n        (\"headache_vision\", [\n            re.compile(r\"\\bsevere\\s+headache\\b\", re.IGNORECASE),\n            re.compile(r\"\\bblurred?\\s+vision\\b\", re.IGNORECASE),\n            re.compile(r\"\\bvision\\s+(is\\s+)?blurred?\\b\", re.IGNORECASE),\n            re.compile(r\"\\bseeing\\s+(spots?|stars?)\\b\", re.IGNORECASE),\n            re.compile(r\"\\bkichwa\\s+kuuma\\b\", re.IGNORECASE),  # Swahili: headache\n            re.compile(r\"\\bmacho\\s+kuona\\s+vibaya\\b\", re.IGNORECASE),  # Swahili: blurred vision\n        ]),\n        (\"fever\", [\n            re.compile(r\"\\bhigh\\s+fever\\b\", re.IGNORECASE),\n            re.compile(r\"\\bsevere\\s+fever\\b\", re.IGNORECASE),\n            re.compile(r\"\\bchills\\b\", re.IGNORECASE),\n            re.compile(r\"\\bhoma\\s+kali\\b\", re.IGNORECASE),  # Swahili: high fever\n            re.compile(r\"\\bbaridi\\s+mwilini\\b\", re.IGNORECASE),  # Swahili: chills\n        ]),\n        (\"fetal_movement\", [\n            re.compile(r\"\\breduced\\s+fetal\\s+movement\\b\", re.IGNORECASE),\n            re.compile(r\"\\bno\\s+(fetal\\s+)?movement\\b\", re.IGNORECASE),\n            re.compile(r\"\\bbaby\\s+(not\\s+moving|stopped?\\s+moving|isn'?t\\s+moving)\\b\", re.IGNORECASE),\n            re.compile(r\"\\bcan'?t\\s+feel\\s+(the\\s+)?baby\\b\", re.IGNORECASE),\n            re.compile(r\"\\bmtoto\\s+ha(tembei|chezi)\\b\", re.IGNORECASE),  # Swahili: baby not moving\n        ]),\n        (\"abdominal_pain\", [\n            re.compile(r\"\\bsevere\\s+(abdominal\\s+)?pain\\b\", re.IGNORECASE),\n            re.compile(r\"\\bstomach\\s+pain\\b\", re.IGNORECASE),\n            re.compile(r\"\\bsharp\\s+pain\\b\", re.IGNORECASE),\n            re.compile(r\"\\btumbo\\s+kuuma\\s+sana\\b\", re.IGNORECASE),  # Swahili: severe stomach pain\n        ]),\n        (\"water_breaking\", [\n            re.compile(r\"\\bwater\\s+(break(ing|s)?|broke)\\b\", re.IGNORECASE),\n            re.compile(r\"\\bfluid\\s+(leaking|leakage|gushing)\\b\", re.IGNORECASE),\n            re.compile(r\"\\bleaking\\s+fluid\\b\", re.IGNORECASE),\n            re.compile(r\"\\bmaji\\s+ya(mekatika|kutoka)\\b\", re.IGNORECASE),  # Swahili: water breaking\n        ]),\n        (\"convulsions\", [\n            re.compile(r\"\\bconvulsion\\b\", re.IGNORECASE),\n            re.compile(r\"\\bseizure\\b\", re.IGNORECASE),\n            re.compile(r\"\\bloss\\s+of\\s+consciousness\\b\", re.IGNORECASE),\n            re.compile(r\"\\bfaint(ed|ing)\\b\", re.IGNORECASE),\n            re.compile(r\"\\bpassed?\\s+out\\b\", re.IGNORECASE),\n            re.compile(r\"\\bdegedege\\b\", re.IGNORECASE),  # Swahili: convulsions\n            re.compile(r\"\\bkupoteza\\s+fahamu\\b\", re.IGNORECASE),  # Swahili: loss of consciousness\n        ]),\n        (\"swelling\", [\n            re.compile(r\"\\bsevere\\s+swelling\\b\", re.IGNORECASE),\n            re.compile(r\"\\bswollen\\s+(face|hands?|feet)\\b\", re.IGNORECASE),\n            re.compile(r\"\\bkuvimba\\s+sana\\b\", re.IGNORECASE),  # Swahili: severe swelling\n        ]),\n    ]\n\n    categories_found = []\n    keywords_found = []\n\n    for category, patterns in danger_sign_patterns:\n        for pattern in patterns:\n            match = pattern.search(input)\n            if match:\n                if category not in categories_found:\n                    categories_found.append(category)\n                keywords_found.append(match.group())\n                break  # One match per category is sufficient\n\n    set_temp_state_key(\"danger_route\", \"EMERGENCY\" if categories_found else \"SAFE\")\n    set_temp_state_key(\"danger_categories\", categories_found)\n    set_temp_state_key(\"danger_keywords\", keywords_found)\n\n    # Tags carry the detection into the OCS transcript export (see ocs/export_adapter.py).\n    # OCS tag names are limited to 100 characters.\n    for category in categories_found:\n        add_message_tag(\"danger_sign:\" + category)\n    for keyword in keywords_found:\n        add_message_tag((\"danger_keyword:\" + \" \".join(keyword.split()))[:100])\n\n    return input\n"
+          }
+        }
+      },
+      {
+        "id": "danger_router",
+        "type": "pipelineNode",
+        "position": {
+          "x": 600,
+          "y": 200
+        },
+        "data": {
+          "id": "danger_router",
+          "type": "StaticRouterNode",
+          "label": "",
+          "params": {
+            "name": "danger_router",
+            "data_source": "temp_state",
+            "route_key": "danger_route",
+            "keywords": [
+              "EMERGENCY",
+              "SAFE"
+            ],
+            "default_keyword_index": 0,
+            "tag_output_message": true
+          }
+        }
+      },
+      {
+        "id": "emergency_response",
+        "type": "pipelineNode",
+        "position": {
+          "x": 900,
+          "y": 0
+        },
+        "data": {
+          "id": "emergency_response",
+          "type": "CodeNode",
+          "label": "",
+          "params": {
+            "name": "emergency_response",
+            "code": "\"\"\"\nOpen Chat Studio Python node: emergency response for detected danger signs.\n\nRuns on the EMERGENCY branch of the danger router. There is no LLM on this branch,\nso the message never waits on model latency or availability.\n\nThe text is the same as backend/app/services/danger_signs.py get_emergency_response():\nheader, nearest facilities, footer. The facility list is a static copy of the top 5\nverified, active, emergency-capable Migori facilities in\nbackend/app/seeds/health_facilities.py, ordered by display_priority then name.\nocs/tests/test_emergency_response_node.py fails if this copy and the seed differ.\n\nLanguage comes from participant data ``language_preference``; anything other than\n\"sw\" gets English, as in Zeya.\n\"\"\"\n\n\ndef main(input: str, **kwargs) -> str:\n    header_en = (\n        \"URGENT: This sounds like it could be a danger sign that requires immediate \"\n        \"medical attention. Please do the following right away:\\n\\n\"\n        \"1. Go to your nearest health facility immediately or call emergency services.\\n\"\n        \"2. If you cannot travel, ask someone nearby to help you get to the hospital.\\n\"\n        \"3. Do NOT wait to see if symptoms improve on their own.\\n\\n\"\n    )\n    header_sw = (\n        \"DHARURA: Hii inaonekana kama dalili ya hatari inayohitaji matibabu ya haraka. \"\n        \"Tafadhali fanya yafuatayo mara moja:\\n\\n\"\n        \"1. Nenda hospitali iliyo karibu nawe mara moja au piga simu ya dharura.\\n\"\n        \"2. Ikiwa huwezi kusafiri, mwombe mtu aliye karibu akusaidie kwenda hospitalini.\\n\"\n        \"3. USISUBIRI kuona kama dalili zitaboreshwa zenyewe.\\n\\n\"\n    )\n    footer_en = (\n        \"\\n\\nThis is educational information, not medical diagnosis. \"\n        \"Always consult your healthcare provider for medical advice.\"\n    )\n    footer_sw = (\n        \"\\n\\nHii ni taarifa ya kielimu, si utambuzi wa kimatibabu. \"\n        \"Daima wasiliana na mtoa huduma wako wa afya kwa ushauri wa kimatibabu.\"\n    )\n\n    # (name, phone) in display order.\n    facilities = [\n        (\"Migori County Referral Hospital\", \"0800 723 253\"),\n        (\"Ombo Mission Hospital\", \"0722 123 456\"),\n        (\"Isebania Sub-County Hospital\", \"0733 456 789\"),\n        (\"Awendo Sub-County Hospital\", \"0744 567 890\"),\n        (\"Rongo Sub-County Hospital\", \"0755 678 901\"),\n    ]\n\n    # The OCS sandbox does not support tuple-unpacking assignment (no _unpack_sequence_),\n    # so each value is assigned separately.\n    language = (get_participant_data() or {}).get(\"language_preference\")\n    if language == \"sw\":\n        header = header_sw\n        facilities_title = \"Hospitali za karibu:\\n\"\n        footer = footer_sw\n    else:\n        header = header_en\n        facilities_title = \"Nearest facilities:\\n\"\n        footer = footer_en\n\n    facility_lines = [\"- \" + name + \": \" + phone for name, phone in facilities]\n    return header + facilities_title + \"\\n\".join(facility_lines) + footer\n"
+          }
+        }
+      },
+      {
+        "id": "registration",
+        "type": "pipelineNode",
+        "position": {
+          "x": 900,
+          "y": 350
+        },
+        "data": {
+          "id": "registration",
+          "type": "CodeNode",
+          "label": "",
+          "params": {
+            "name": "registration",
+            "code": "\"\"\"\nOpen Chat Studio Python node: study registration and LLM context.\n\nRuns on the SAFE branch, after the danger gate, so registration messages are\nalso checked for danger signs.\n\nPorts ConversationHandler._handle_registration (consent -> name -> gestational\nage) and AIEngine._build_context from the Zeya backend, using participant data in\nplace of the User table. Reply wording is unchanged.\n\nOutputs (temp state):\n    registration_route: \"REPLY\" (return this node's text to the user) or\n        \"REGISTERED\" (continue to the LLM with the user's message).\n    llm_context: context block for the LLM system prompt (REGISTERED only).\n\nRegistration replies are tagged \"registration\", and the first-contact turn also\n\"registration:first_contact\". Zeya never logged its registration replies or the\nfirst message, so ocs/export_adapter.py uses these tags to leave them out.\n\"\"\"\n\n\ndef main(input: str, **kwargs) -> str:\n    welcome_en = (\n        \"Welcome to the Antenatal Education Chatbot! I am here to help you with \"\n        \"information about your pregnancy journey.\\n\\n\"\n        \"This is a research study chatbot that provides educational information about \"\n        \"maternal health based on WHO and Kenya Ministry of Health guidelines.\\n\\n\"\n        \"Important: This is educational information, not medical diagnosis. Always \"\n        \"consult your healthcare provider for medical advice.\\n\\n\"\n        \"Do you consent to participate in this study and receive antenatal education \"\n        \"messages? Please reply YES or NO.\"\n    )\n    welcome_sw = (\n        \"Karibu kwenye Chatbot ya Elimu ya Ujauzito! Niko hapa kukusaidia na \"\n        \"habari kuhusu safari yako ya ujauzito.\\n\\n\"\n        \"Hii ni chatbot ya utafiti inayotoa habari za kielimu kuhusu afya ya mama \"\n        \"kulingana na miongozo ya WHO na Wizara ya Afya ya Kenya.\\n\\n\"\n        \"Muhimu: Hii ni habari ya kielimu, si utambuzi wa kimatibabu. Daima \"\n        \"wasiliana na mtoa huduma wako wa afya kwa ushauri wa kimatibabu.\\n\\n\"\n        \"Je, unakubali kushiriki katika utafiti huu na kupokea ujumbe wa elimu ya \"\n        \"ujauzito? Tafadhali jibu NDIYO au HAPANA.\"\n    )\n    gestational_guidance = [\n        (\n            1,\n            12,\n            \"First trimester: Focus on nutrition (folate, iron), managing morning sickness, \"\n            \"first ANC visit importance, and avoiding harmful substances.\",\n        ),\n        (\n            13,\n            26,\n            \"Second trimester: Focus on balanced diet, fetal movement awareness, \"\n            \"anomaly screening, dental care, and preparing for birth.\",\n        ),\n        (\n            27,\n            40,\n            \"Third trimester: Focus on birth preparedness, recognizing labor signs, \"\n            \"danger signs awareness, breastfeeding preparation, and newborn care.\",\n        ),\n    ]\n\n    data = get_participant_data() or {}\n    now = datetime.datetime.now(datetime.timezone.utc)\n    text = input or \"\"\n    text_lower = text.strip().lower()\n\n    def reply(message):\n        set_temp_state_key(\"registration_route\", \"REPLY\")\n        add_message_tag(\"registration\")\n        return message\n\n    if data.get(\"registration_complete\"):\n        gestational_age = None\n        if data.get(\"gestational_age_at_enrollment\") is not None:\n            enrolled_at = datetime.datetime.fromisoformat(data[\"enrolled_at\"])\n            weeks_since_enrollment = (now - enrolled_at).days // 7\n            gestational_age = data[\"gestational_age_at_enrollment\"] + weeks_since_enrollment\n\n        parts = []\n        if gestational_age is not None:\n            parts.append(\"User's current gestational age: \" + str(gestational_age) + \" weeks.\")\n            for guidance in gestational_guidance:\n                if guidance[0] <= gestational_age <= guidance[1]:\n                    parts.append(\"Trimester guidance: \" + guidance[2])\n                    break\n        if data.get(\"language_preference\") == \"sw\":\n            parts.append(\"User prefers Swahili. Respond in Swahili.\")\n\n        set_temp_state_key(\"llm_context\", \"\\n\".join(parts) if parts else \"No additional context available.\")\n        set_temp_state_key(\"registration_route\", \"REGISTERED\")\n        return input\n\n    if not data.get(\"welcome_sent\"):\n        # First contact: enrol and send the consent request. Zeya ignored the content\n        # of this first message.\n        language = data.get(\"language_preference\") or \"en\"\n        set_participant_data_key(\"welcome_sent\", True)\n        set_participant_data_key(\"enrolled_at\", now.isoformat())\n        set_participant_data_key(\"consent_given\", False)\n        set_participant_data_key(\"registration_complete\", False)\n        set_participant_data_key(\"language_preference\", language)\n        set_participant_data_key(\"study_group\", data.get(\"study_group\") or \"intervention\")\n        message = reply(welcome_sw if language == \"sw\" else welcome_en)\n        add_message_tag(\"registration:first_contact\")\n        return message\n\n    if not data.get(\"consent_given\"):\n        if text_lower in (\"yes\", \"ndiyo\", \"ndio\"):\n            set_participant_data_key(\"consent_given\", True)\n            set_participant_data_key(\"consent_given_at\", now.isoformat())\n            return reply(\"Thank you for consenting to participate! What is your name?\")\n        if text_lower in (\"no\", \"hapana\"):\n            # Zeya deactivated the user here. We record the decision instead, so a later\n            # YES re-enrols them, as the reply promises.\n            set_participant_data_key(\"consent_declined\", True)\n            return reply(\n                \"Thank you for your response. You can message us anytime if you change your mind. Take care, Mama!\"\n            )\n        return reply(\"Please reply YES or NO to consent to participate in the study.\")\n\n    # OCS merges participant.name into participant data as \"name\", so a name may already\n    # be present (e.g. from the channel). Track this step separately.\n    if not data.get(\"name_collected\"):\n        name = text.strip()\n        set_participant_data_key(\"name\", name)\n        set_participant_data_key(\"name_collected\", True)\n        return reply(\n            \"Nice to meet you, \" + name + \"! \"\n            \"How many weeks pregnant are you? \"\n            \"Please reply with a number (for example: 20).\"\n        )\n\n    if data.get(\"gestational_age_at_enrollment\") is None:\n        weeks = None\n        try:\n            weeks = int(text_lower.strip().split()[0])\n        except (ValueError, IndexError):\n            weeks = None\n        if weeks is None or weeks < 1 or weeks > 42:\n            return reply(\"Please enter a valid number of weeks (between 1 and 42). For example: 20\")\n\n        expected_delivery_date = now.date() + datetime.timedelta(weeks=40 - weeks)\n        set_participant_data_key(\"gestational_age_at_enrollment\", weeks)\n        set_participant_data_key(\"expected_delivery_date\", expected_delivery_date.isoformat())\n        set_participant_data_key(\"registration_complete\", True)\n        return reply(\n            \"You are registered! You are \" + str(weeks) + \" weeks pregnant. \"\n            \"Your expected delivery date is approximately \" + expected_delivery_date.strftime(\"%B %d, %Y\") + \".\\n\\n\"\n            \"You can now ask me any questions about your pregnancy. \"\n            \"I can help with:\\n\"\n            \"- Nutrition and diet\\n\"\n            \"- Danger signs to watch for\\n\"\n            \"- Birth preparedness\\n\"\n            \"- Common discomforts\\n\"\n            \"- ANC appointments\\n\"\n            \"- Newborn care\\n\\n\"\n            \"Just type your question and I will do my best to help you, Mama!\"\n        )\n\n    # Consent, name and gestational age are all set but registration_complete is not\n    # (for example, data imported by hand). Finish registration.\n    set_participant_data_key(\"registration_complete\", True)\n    return reply(\"Just type your question and I will do my best to help you, Mama!\")\n"
+          }
+        }
+      },
+      {
+        "id": "registration_router",
+        "type": "pipelineNode",
+        "position": {
+          "x": 1200,
+          "y": 350
+        },
+        "data": {
+          "id": "registration_router",
+          "type": "StaticRouterNode",
+          "label": "",
+          "params": {
+            "name": "registration_router",
+            "data_source": "temp_state",
+            "route_key": "registration_route",
+            "keywords": [
+              "REPLY",
+              "REGISTERED"
+            ],
+            "default_keyword_index": 0,
+            "tag_output_message": false
+          }
+        }
+      },
+      {
+        "id": "llm",
+        "type": "pipelineNode",
+        "position": {
+          "x": 1500,
+          "y": 450
+        },
+        "data": {
+          "id": "llm",
+          "type": "LLMResponseWithPrompt",
+          "label": "",
+          "params": {
+            "name": "llm",
+            "llm_provider_id": 0,
+            "llm_provider_model_id": 0,
+            "llm_model_parameters": {
+              "temperature": 1.0
+            },
+            "prompt": "You are a maternal health education assistant serving pregnant women in rural Kenya. Your role is to provide accurate, culturally appropriate antenatal information based on WHO and Kenya Ministry of Health guidelines.\n\nCRITICAL RULES:\n1. If you detect ANY danger sign (bleeding, severe headache, reduced fetal movement, convulsions, high fever, severe abdominal pain, water breaking, swelling of face/hands), IMMEDIATELY advise seeking urgent medical care at the nearest health facility.\n2. Never diagnose conditions or prescribe treatments.\n3. Always encourage ANC (antenatal care) attendance and completing all recommended visits.\n4. Keep responses under 200 words for readability on mobile phones.\n5. Use simple, clear language appropriate for secondary school education level.\n6. Be culturally sensitive to practices in rural Kenya while correcting harmful myths.\n7. When unsure about medical specifics, advise consulting a healthcare provider.\n\nCONTENT AREAS YOU CAN HELP WITH:\n- Danger signs recognition and when to seek emergency care\n- Nutrition and dietary guidance during pregnancy\n- Physical activity recommendations\n- Birth preparedness and complication readiness\n- Common pregnancy discomforts and safe management\n- ANC appointment importance and schedule\n- Newborn care preparation\n- Breastfeeding education\n\nDISCLAIMER: Include this reminder periodically:\n\"This is educational information, not medical diagnosis. Always consult your healthcare provider for medical advice.\"\n\nRespond in a warm, supportive tone. Address the user as \"Mama\" when appropriate. If the user writes in Swahili, respond in Swahili. If in English, respond in English.\n\n{temp_state.llm_context}",
+            "history_type": "node",
+            "history_mode": "max_history_length",
+            "max_history_length": 12
+          }
+        }
+      },
+      {
+        "id": "end",
+        "type": "endNode",
+        "position": {
+          "x": 1800,
+          "y": 200
+        },
+        "data": {
+          "id": "end",
+          "type": "EndNode",
+          "label": "",
+          "params": {
+            "name": "end"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start:output->danger_gate",
+        "source": "start",
+        "target": "danger_gate",
+        "sourceHandle": "output",
+        "targetHandle": "input"
+      },
+      {
+        "id": "danger_gate:output->danger_router",
+        "source": "danger_gate",
+        "target": "danger_router",
+        "sourceHandle": "output",
+        "targetHandle": "input"
+      },
+      {
+        "id": "danger_router:output_0->emergency_response",
+        "source": "danger_router",
+        "target": "emergency_response",
+        "sourceHandle": "output_0",
+        "targetHandle": "input"
+      },
+      {
+        "id": "danger_router:output_1->registration",
+        "source": "danger_router",
+        "target": "registration",
+        "sourceHandle": "output_1",
+        "targetHandle": "input"
+      },
+      {
+        "id": "emergency_response:output->end",
+        "source": "emergency_response",
+        "target": "end",
+        "sourceHandle": "output",
+        "targetHandle": "input"
+      },
+      {
+        "id": "registration:output->registration_router",
+        "source": "registration",
+        "target": "registration_router",
+        "sourceHandle": "output",
+        "targetHandle": "input"
+      },
+      {
+        "id": "registration_router:output_0->end",
+        "source": "registration_router",
+        "target": "end",
+        "sourceHandle": "output_0",
+        "targetHandle": "input"
+      },
+      {
+        "id": "registration_router:output_1->llm",
+        "source": "registration_router",
+        "target": "llm",
+        "sourceHandle": "output_1",
+        "targetHandle": "input"
+      },
+      {
+        "id": "llm:output->end",
+        "source": "llm",
+        "target": "end",
+        "sourceHandle": "output",
+        "targetHandle": "input"
+      }
+    ]
+  }
+}
