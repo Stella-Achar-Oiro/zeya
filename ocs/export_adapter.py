@@ -10,10 +10,11 @@ planned analysis can read Zeya-era and OCS-era data the same way.
         --zeya-users zeya_users.csv \\
         --out conversations_export_ocs.csv
 
-``--zeya-users`` links OCS participants to existing Zeya users by phone number and
+``--zeya-users`` links OCS participants to existing Zeya users by WhatsApp id (the
+OCS participant identifier) and
 keeps Zeya's STUDY_#### numbering. Produce it from the Zeya database with:
 
-    \\copy (SELECT DISTINCT u.id AS user_id, u.phone_number FROM users u
+    \\copy (SELECT DISTINCT u.id AS user_id, u.whatsapp_id FROM users u
             JOIN conversations c ON c.user_id = u.id) TO 'zeya_users.csv' CSV HEADER
 
 Rules, matching what Zeya logged:
@@ -140,7 +141,7 @@ def _pair_turns(rows: list[dict]) -> dict[int, list[dict]]:
     return turns
 
 
-def convert_ocs_export(rows: Iterable[dict], phone_to_user_id: dict[str, str]) -> list[dict]:
+def convert_ocs_export(rows: Iterable[dict], wa_id_to_user_id: dict[str, str]) -> list[dict]:
     """Convert OCS export rows to Zeya rows keyed by ``user_key`` instead of ``study_id``.
 
     ``user_key`` is the linked Zeya user id, or ``ocs:<participant public id>``.
@@ -170,7 +171,7 @@ def convert_ocs_export(rows: Iterable[dict], phone_to_user_id: dict[str, str]) -
             if incoming:
                 response_time_ms = int((at - _timestamp(incoming[0])).total_seconds() * 1000) or ""
 
-        user_id = phone_to_user_id.get(_digits(row["Participant Identifier"]))
+        user_id = wa_id_to_user_id.get(_digits(row["Participant Identifier"]))
         output.append(
             {
                 "user_key": user_id or f"ocs:{row['Participant Public ID']}",
@@ -201,19 +202,19 @@ def assign_study_ids(rows: list[dict], zeya_user_ids: Iterable[str]) -> list[dic
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--ocs-export", required=True, help="CSV exported from the OCS chatbot sessions page")
-    parser.add_argument("--zeya-users", help="CSV with user_id,phone_number from the Zeya database")
+    parser.add_argument("--zeya-users", help="CSV with user_id,whatsapp_id from the Zeya database")
     parser.add_argument("--out", help="output path (default: stdout)")
     args = parser.parse_args(argv)
 
     with open(args.ocs_export, newline="", encoding="utf-8") as f:
         ocs_rows = list(csv.DictReader(f))
 
-    phone_to_user_id: dict[str, str] = {}
+    wa_id_to_user_id: dict[str, str] = {}
     if args.zeya_users:
         with open(args.zeya_users, newline="", encoding="utf-8") as f:
-            phone_to_user_id = {_digits(r["phone_number"]): r["user_id"] for r in csv.DictReader(f)}
+            wa_id_to_user_id = {_digits(r["whatsapp_id"]): r["user_id"] for r in csv.DictReader(f)}
 
-    rows = assign_study_ids(convert_ocs_export(ocs_rows, phone_to_user_id), phone_to_user_id.values())
+    rows = assign_study_ids(convert_ocs_export(ocs_rows, wa_id_to_user_id), wa_id_to_user_id.values())
 
     out = open(args.out, "w", newline="", encoding="utf-8") if args.out else sys.stdout
     try:
