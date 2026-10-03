@@ -110,6 +110,7 @@ def main(input: str, **kwargs) -> str:
         if text_lower in ("yes", "ndiyo", "ndio"):
             set_participant_data_key("consent_given", True)
             set_participant_data_key("consent_given_at", now.isoformat())
+            set_participant_data_key("consent_declined", False)
             return reply("Thank you for consenting to participate! What is your name?")
         if text_lower in ("no", "hapana"):
             # Zeya deactivated the user here. We record the decision instead, so a later
@@ -124,6 +125,9 @@ def main(input: str, **kwargs) -> str:
     # be present (e.g. from the channel). Track this step separately.
     if not data.get("name_collected"):
         name = text.strip()
+        if not name:
+            # A message with no text (photo, voice note). Zeya ignored these; ask again.
+            return reply("What is your name?")
         set_participant_data_key("name", name)
         set_participant_data_key("name_collected", True)
         return reply(

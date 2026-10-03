@@ -122,6 +122,7 @@ class TestConsent:
 
         assert harness.output == CONSENTED_MSG
         assert harness.participant_data["consent_given"] is True
+        assert harness.participant_data["consent_declined"] is False
 
     @pytest.mark.parametrize("answer", ["maybe", "yes please", ""])
     def test_reprompts_on_anything_else(self, answer):
@@ -141,6 +142,15 @@ class TestName:
             "Nice to meet you, Akinyi Otieno! How many weeks pregnant are you? "
             "Please reply with a number (for example: 20)."
         )
+
+    @pytest.mark.parametrize("answer", ["", "   "])
+    def test_message_without_text_does_not_set_name(self, answer):
+        # e.g. a photo or voice note. Zeya ignored non-text messages; here we ask again.
+        harness = _after("Hi", "yes", answer)
+
+        assert harness.output == "What is your name?"
+        assert "name" not in harness.participant_data
+        assert "name_collected" not in harness.participant_data
 
     def test_asks_for_name_even_if_ocs_already_has_one(self):
         # OCS exposes participant.name as participant data "name".
