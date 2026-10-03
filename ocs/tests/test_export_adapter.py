@@ -265,3 +265,92 @@ def test_tolerates_missing_participant_data(bad):
     rows = convert_ocs_export(row, phone_to_user_id={})
 
     assert rows[0]["gestational_age"] == ""
+
+
+def _blank_trace(rows):
+    # OCS only fills "Trace ID" when an external tracing provider (e.g. Langfuse) is set up.
+    for row in rows:
+        row["Trace ID"] = ""
+    return rows
+
+
+def _session(rows, session_id):
+    for row in rows:
+        row["Session ID"] = session_id
+    return rows
+
+
+def test_blank_trace_ids_pair_by_session_and_order():
+    pending = REGISTERED | {"registration_complete": False}
+    other = _session(
+        _turn(
+            20,
+            "Hi",
+            "Welcome...",
+            "2026-09-01 09:00:00+00:00",
+            "2026-09-01 09:00:01+00:00",
+            pending,
+            tags="registration, registration:first_contact",
+            participant="+254799",
+            public_id="p-2",
+        ),
+        "s-2",
+    )
+    mine = _session(
+        _turn(21, "Hello", "Hi Mama", "2026-09-15 10:00:00+00:00", "2026-09-15 10:00:01.250000+00:00", REGISTERED),
+        "s-1",
+    )
+    later = _session(
+        _turn(
+            22,
+            "yes",
+            "Thank you for consenting...",
+            "2026-09-01 09:01:00+00:00",
+            "2026-09-01 09:01:01+00:00",
+            REGISTERED,
+            tags="registration",
+            participant="+254799",
+            public_id="p-2",
+        ),
+        "s-2",
+    )
+
+    rows = convert_ocs_export(_blank_trace(other + mine + later), phone_to_user_id={})
+
+    assert [(r["user_key"], r["direction"], r["message_text"]) for r in rows] == [
+        ("ocs:p-2", "incoming", "yes"),
+        ("ocs:p-1", "incoming", "Hello"),
+        ("ocs:p-1", "outgoing", "Hi Mama"),
+    ]
+    assert rows[2]["response_time_ms"] == 1250
+
+
+def test_reply_pairs_with_preceding_message_in_same_session():
+    # Rows from two sessions interleaved in file order.
+    a = _session(_turn(30, "A?", "A!", "2026-09-15 10:00:00+00:00", "2026-09-15 10:00:03+00:00", REGISTERED), "s-a")
+    b = _session(
+        _turn(
+            31,
+            "B?",
+            "B!",
+            "2026-09-15 10:00:01+00:00",
+            "2026-09-15 10:00:02+00:00",
+            REGISTERED,
+            participant="+254711",
+            public_id="p-b",
+        ),
+        "s-b",
+    )
+
+    rows = convert_ocs_export(_blank_trace([a[0], b[0], b[1], a[1]]), phone_to_user_id={})
+
+    times = {r["message_text"]: r["response_time_ms"] for r in rows if r["direction"] == "outgoing"}
+    assert times == {"A!": 3000, "B!": 1000}
+
+
+def test_message_without_reply_is_kept():
+    rows = _turn(40, "Hello", "unused", "2026-09-15 10:00:00+00:00", "2026-09-15 10:00:01+00:00", REGISTERED)
+
+    result = convert_ocs_export(_blank_trace(rows[:1]), phone_to_user_id={})
+
+    assert [(r["direction"], r["message_text"]) for r in result] == [("incoming", "Hello")]

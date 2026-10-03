@@ -26,6 +26,9 @@ Rules, matching what Zeya logged:
   is collapsed to single spaces.
 - gestational_age is the participant's gestational age when the message was sent.
 - response_time_ms is the outgoing message time minus the incoming message time.
+- Each reply is paired with the user message just before it in the same session. The
+  export's Trace ID cannot be used: OCS leaves it blank unless an external tracing
+  provider is configured.
 """
 
 import argparse
@@ -113,6 +116,30 @@ def _consented_participants(rows: list[dict]) -> set[str]:
     return {key for key, (_, data) in latest.items() if data.get("consent_given") is True}
 
 
+def _pair_turns(rows: list[dict]) -> dict[int, list[dict]]:
+    """Group each AI reply with the user message just before it in the same session.
+
+    OCS writes each exchange as its human row followed by its AI row. The "Trace ID"
+    column cannot be used for this: OCS only fills it when an external tracing
+    provider is configured, and leaves it blank otherwise. Returns, for each row
+    (by ``id``), the rows of its exchange.
+    """
+    turns: dict[int, list[dict]] = {}
+    pending: dict[str, dict] = {}  # session id -> human row still waiting for its reply
+    for row in rows:
+        session = row["Session ID"]
+        if row["Message Type"] == "human":
+            turns[id(row)] = [row]
+            pending[session] = row
+        elif session in pending:
+            human = pending.pop(session)
+            turns[id(human)].append(row)
+            turns[id(row)] = turns[id(human)]
+        else:
+            turns[id(row)] = [row]
+    return turns
+
+
 def convert_ocs_export(rows: Iterable[dict], phone_to_user_id: dict[str, str]) -> list[dict]:
     """Convert OCS export rows to Zeya rows keyed by ``user_key`` instead of ``study_id``.
 
@@ -120,18 +147,14 @@ def convert_ocs_export(rows: Iterable[dict], phone_to_user_id: dict[str, str]) -
     """
     rows = [r for r in rows if r.get("Message Type") in DIRECTIONS]
     consented = _consented_participants(rows)
-
-    traces: dict[str, list[dict]] = {}
-    for row in rows:
-        traces.setdefault(row["Trace ID"], []).append(row)
+    turns = _pair_turns(rows)
 
     output = []
     for row in sorted(rows, key=_timestamp):
         if row["Participant Public ID"] not in consented:
             continue
-        trace_rows = traces[row["Trace ID"]]
-        trace_tags = [tag for r in trace_rows for tag in _tags(r)]
-        if "registration:first_contact" in trace_tags:
+        turn = turns[id(row)]
+        if any("registration:first_contact" in _tags(r) for r in turn):
             continue
         direction = DIRECTIONS[row["Message Type"]]
         tags = _tags(row)
@@ -143,7 +166,7 @@ def convert_ocs_export(rows: Iterable[dict], phone_to_user_id: dict[str, str]) -
         is_danger = direction == "outgoing" and any(t.startswith("danger_sign:") for t in tags)
         response_time_ms: int | str = ""
         if direction == "outgoing":
-            incoming = [r for r in trace_rows if r["Message Type"] == "human"]
+            incoming = [r for r in turn if r["Message Type"] == "human"]
             if incoming:
                 response_time_ms = int((at - _timestamp(incoming[0])).total_seconds() * 1000) or ""
 
