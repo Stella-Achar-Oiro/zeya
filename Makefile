@@ -1,7 +1,7 @@
 # Zeya - WhatsApp AI Antenatal Education Chatbot
 # Run `make help` to see available commands
 
-.PHONY: help up down restart logs migrate test test-cov build clean reset shell db-shell redis-shell ngrok frontend-dev install-hooks
+.PHONY: help up down restart logs migrate test test-cov build clean reset shell db-shell redis-shell ngrok frontend-dev install-hooks test-ocs lint-ocs
 
 # Default target
 help:
@@ -24,6 +24,8 @@ help:
 	@echo "Testing:"
 	@echo "  make test      - Run all tests"
 	@echo "  make test-cov  - Run tests with coverage"
+	@echo "  make test-ocs  - Run Open Chat Studio node tests (OCS_SOURCE=<checkout> to use real sandbox)"
+	@echo "  make lint-ocs  - Lint Open Chat Studio node sources"
 	@echo ""
 	@echo "Development:"
 	@echo "  make shell     - Open backend shell"
@@ -82,6 +84,15 @@ test:
 
 test-cov:
 	docker-compose exec backend pytest --cov=app --cov-report=term-missing
+
+# Runs locally: pip install -r ocs/requirements-dev.txt
+PYTHON ?= python3
+
+test-ocs:
+	$(PYTHON) -m pytest ocs/tests -q -c /dev/null --rootdir=.
+
+lint-ocs:
+	$(PYTHON) -m ruff check ocs && $(PYTHON) -m ruff format --check ocs
 
 # ============ Development Commands ============
 
