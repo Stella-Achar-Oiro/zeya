@@ -47,8 +47,9 @@ def test_keywords_are_tagged_for_export(danger_gate_source):
 
     harness.run("I have severe headache and heavy\n bleeding")
 
-    assert "danger_keyword:severe headache" in harness.message_tags
-    assert "danger_keyword:heavy bleeding" in harness.message_tags
+    # OCS exports tags alphabetically, so the category is kept in the tag to restore order.
+    assert "danger_keyword:headache_vision:severe headache" in harness.message_tags
+    assert "danger_keyword:bleeding:heavy bleeding" in harness.message_tags
 
 
 def test_keyword_tags_fit_ocs_tag_length(danger_gate_source):
