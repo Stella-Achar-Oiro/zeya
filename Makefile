@@ -1,7 +1,7 @@
 # Zeya - WhatsApp AI Antenatal Education Chatbot
 # Run `make help` to see available commands
 
-.PHONY: help up down restart logs migrate test test-cov build clean reset shell db-shell redis-shell ngrok frontend-dev install-hooks test-ocs lint-ocs
+.PHONY: help up down restart logs migrate test test-cov build clean reset shell db-shell redis-shell ngrok frontend-dev install-hooks test-ocs lint-ocs test-ocs-engine
 
 # Default target
 help:
@@ -26,6 +26,7 @@ help:
 	@echo "  make test-cov  - Run tests with coverage"
 	@echo "  make test-ocs  - Run Open Chat Studio node tests (OCS_SOURCE=<checkout> to use real sandbox)"
 	@echo "  make lint-ocs  - Lint Open Chat Studio node sources"
+	@echo "  make test-ocs-engine OCS_SOURCE=<checkout> - Run the pipeline in the real OCS engine"
 	@echo ""
 	@echo "Development:"
 	@echo "  make shell     - Open backend shell"
@@ -93,6 +94,13 @@ test-ocs:
 
 lint-ocs:
 	$(PYTHON) -m ruff check ocs && $(PYTHON) -m ruff format --check ocs
+
+# Uses the OCS checkout's virtualenv and test database; writes no files into the checkout.
+test-ocs-engine:
+	@test -n "$(OCS_SOURCE)" || (echo "Set OCS_SOURCE=/path/to/open-chat-studio" && exit 1)
+	cd $(OCS_SOURCE) && PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(OCS_SOURCE):$(CURDIR) \
+		.venv/bin/python -m pytest -p no:cacheprovider -c pyproject.toml --rootdir=. \
+		$(CURDIR)/ocs/integration -q
 
 # ============ Development Commands ============
 
