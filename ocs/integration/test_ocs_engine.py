@@ -139,3 +139,11 @@ def test_safe_message_from_new_user_gets_welcome_without_llm(run, fake_llm):
     assert output["messages"][-1].startswith("Welcome to the Antenatal Education Chatbot!")
     assert output["participant_data"]["welcome_sent"] is True
     assert llm.calls == []
+
+
+def test_drift_check_accepts_ocs_round_trip(pipeline):
+    """What OCS stores and serves back (Pipeline.flow_data) must pass the drift check."""
+    from ocs.check_drift import find_drift
+
+    pipeline.refresh_from_db()
+    assert find_drift({"pipeline": {"data": pipeline.flow_data}}) == []

@@ -76,7 +76,7 @@ def test_normal_turn():
             REGISTERED,
             tags="danger_router:SAFE",
         ),
-        phone_to_user_id={},
+        wa_id_to_user_id={},
     )
 
     incoming, outgoing = rows
@@ -112,7 +112,7 @@ def test_danger_turn_restores_keyword_order():
             REGISTERED,
             tags=tags,
         ),
-        phone_to_user_id={},
+        wa_id_to_user_id={},
     )
 
     incoming, outgoing = rows
@@ -144,7 +144,7 @@ def test_drops_rows_zeya_never_logged():
             tags="registration",
         )
         + _turn(5, "Hello", "Hi Mama", "2026-09-15 10:00:00+00:00", "2026-09-15 10:00:01+00:00", REGISTERED),
-        phone_to_user_id={},
+        wa_id_to_user_id={},
     )
 
     assert [(r["direction"], r["message_text"]) for r in rows] == [
@@ -169,7 +169,7 @@ def test_drops_participants_who_never_consented():
             public_id="p-2",
         )
         + _turn(7, "Hello", "Hi", "2026-09-15 10:00:00+00:00", "2026-09-15 10:00:01+00:00", REGISTERED),
-        phone_to_user_id={},
+        wa_id_to_user_id={},
     )
 
     assert {r["user_key"] for r in rows} == {"ocs:p-1"}
@@ -188,7 +188,7 @@ def test_gestational_age_blank_before_registration():
             tags="registration",
         )
         + _turn(9, "Hello", "Hi", "2026-09-15 10:00:00+00:00", "2026-09-15 10:00:01+00:00", REGISTERED),
-        phone_to_user_id={},
+        wa_id_to_user_id={},
     )
 
     assert rows[0]["gestational_age"] == ""
@@ -206,7 +206,7 @@ def test_links_existing_zeya_users_by_phone():
             REGISTERED,
             participant="+254 700 000 001",
         ),
-        phone_to_user_id={"254700000001": "0f3c9a2e-0000-0000-0000-000000000001"},
+        wa_id_to_user_id={"254700000001": "0f3c9a2e-0000-0000-0000-000000000001"},
     )
 
     assert {r["user_key"] for r in rows} == {"0f3c9a2e-0000-0000-0000-000000000001"}
@@ -236,7 +236,7 @@ def test_cli_writes_zeya_csv(tmp_path):
         writer.writeheader()
         writer.writerows(rows)
     zeya_users = tmp_path / "users.csv"
-    zeya_users.write_text("user_id,phone_number\na0000000-0000-0000-0000-000000000000,254711111111\n")
+    zeya_users.write_text("user_id,whatsapp_id\na0000000-0000-0000-0000-000000000000,254711111111\n")
     out = tmp_path / "out.csv"
 
     assert main(["--ocs-export", str(ocs_csv), "--zeya-users", str(zeya_users), "--out", str(out)]) == 0
@@ -262,6 +262,6 @@ def test_tolerates_missing_participant_data(bad):
     row = _turn(12, "Hello", "Hi", "2026-09-15 10:00:00+00:00", "2026-09-15 10:00:01+00:00", REGISTERED)
     row[0]["Participant Data"] = bad
 
-    rows = convert_ocs_export(row, phone_to_user_id={})
+    rows = convert_ocs_export(row, wa_id_to_user_id={})
 
     assert rows[0]["gestational_age"] == ""
