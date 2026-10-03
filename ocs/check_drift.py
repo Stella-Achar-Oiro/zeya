@@ -8,11 +8,13 @@ rule 3). Run it after every deploy and on a schedule; it exits 1 on any differen
     # Save the live pipeline (logged-in browser, or a session cookie):
     curl -s -b "sessionid=$OCS_SESSION" \\
         https://openchatstudio.co.ke/a/evarest/pipelines/data/<pipeline id>/ > live.json
-    python -m ocs.check_drift live.json
+    python -m ocs.check_drift live.json --llm-provider-id 7 --llm-provider-model-id 31
 
 Compared: node set, node types, edges (by node name and handle), all Python node
 code, router settings, the LLM prompt, history and model parameters.
-Ignored: node positions, labels, ids, and LLM provider and model ids.
+The LLM provider and model ids are specific to the instance, so the expected values are
+passed in. A model switched in the UI is reported as drift.
+Ignored: node positions, labels and ids.
 """
 
 import argparse
@@ -21,7 +23,7 @@ import sys
 
 from ocs.build_pipeline import build_pipeline
 
-IGNORED_PARAMS = {"llm_provider_id", "llm_provider_model_id"}
+INSTANCE_PARAMS = ("llm_provider_id", "llm_provider_model_id")
 
 
 def _flow(document: dict) -> dict:
@@ -36,7 +38,7 @@ def _describe(flow: dict) -> tuple[dict, set]:
     nodes = {
         names[node["id"]]: {
             "type": node["data"]["type"],
-            "params": {k: v for k, v in node["data"]["params"].items() if k not in IGNORED_PARAMS},
+            "params": {k: v for k, v in node["data"]["params"].items() if k not in INSTANCE_PARAMS},
         }
         for node in flow["nodes"]
     }
@@ -47,7 +49,9 @@ def _describe(flow: dict) -> tuple[dict, set]:
     return nodes, edges
 
 
-def find_drift(live_document: dict) -> list[str]:
+def find_drift(
+    live_document: dict, llm_provider_id: int | None = None, llm_provider_model_id: int | None = None
+) -> list[str]:
     """Return human-readable differences between the live pipeline and the repository."""
     expected_nodes, expected_edges = _describe(build_pipeline(0, 0)["data"])
     live_nodes, live_edges = _describe(_flow(live_document))
@@ -71,16 +75,27 @@ def find_drift(live_document: dict) -> list[str]:
     for edge in sorted(live_edges - expected_edges):
         problems.append("unexpected edge: {} [{}] -> {}".format(*edge))
 
+    expected_ids = {"llm_provider_id": llm_provider_id, "llm_provider_model_id": llm_provider_model_id}
+    for node in _flow(live_document)["nodes"]:
+        params = node["data"]["params"]
+        for key in INSTANCE_PARAMS:
+            if key in params and expected_ids[key] is not None and params[key] != expected_ids[key]:
+                problems.append(
+                    f"{params.get('name', node['id'])}: '{key}' is {params[key]}, expected {expected_ids[key]}"
+                )
+
     return problems
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("live", help="JSON from GET /a/<team>/pipelines/data/<id>/ ('-' for stdin)")
+    parser.add_argument("--llm-provider-id", type=int, required=True, help="the Gemini provider id on the instance")
+    parser.add_argument("--llm-provider-model-id", type=int, required=True, help="the deployed model id")
     args = parser.parse_args(argv)
 
     with sys.stdin if args.live == "-" else open(args.live, encoding="utf-8") as f:
-        problems = find_drift(json.load(f))
+        problems = find_drift(json.load(f), args.llm_provider_id, args.llm_provider_model_id)
 
     if problems:
         print("DRIFT: the live pipeline does not match the repository", file=sys.stderr)

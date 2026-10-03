@@ -19,6 +19,21 @@ def _node(document, name):
 
 def test_deployed_copy_matches():
     assert find_drift(_live()) == []
+    assert find_drift(_live(), llm_provider_id=7, llm_provider_model_id=31) == []
+
+
+def test_detects_model_switched_in_ui():
+    live = _live(llm_provider_id=7, llm_provider_model_id=44)
+
+    assert find_drift(live, llm_provider_id=7, llm_provider_model_id=31) == [
+        "llm: 'llm_provider_model_id' is 44, expected 31"
+    ]
+
+
+def test_detects_provider_switched_in_ui():
+    live = _live(llm_provider_id=3, llm_provider_model_id=31)
+
+    assert find_drift(live, llm_provider_id=7, llm_provider_model_id=31) == ["llm: 'llm_provider_id' is 3, expected 7"]
 
 
 def test_ignores_positions_labels_and_provider_ids():
@@ -92,4 +107,12 @@ def test_cli_exit_code(tmp_path, capsys, mutate, code):
     path = tmp_path / "live.json"
     path.write_text(json.dumps(live))
 
-    assert main([str(path)]) == code
+    assert main([str(path), "--llm-provider-id", "7", "--llm-provider-model-id", "31"]) == code
+
+
+def test_cli_requires_expected_model(tmp_path):
+    path = tmp_path / "live.json"
+    path.write_text(json.dumps(_live()))
+
+    with pytest.raises(SystemExit):
+        main([str(path)])
