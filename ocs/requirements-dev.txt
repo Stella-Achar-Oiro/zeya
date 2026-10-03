@@ -1,0 +1,7 @@
+# Matches the RestrictedPython version pinned in open-chat-studio uv.lock (7df40d8a4).
+RestrictedPython==8.1
+pytest>=8.0.0
+ruff>=0.6
+# backend/app/services/danger_signs.py imports these at module level.
+sqlalchemy>=2.0.27,<3.0.0
+greenlet

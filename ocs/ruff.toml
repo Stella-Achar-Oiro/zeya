@@ -1,0 +1,17 @@
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[lint.per-file-ignores]
+# Node sources run inside the OCS sandbox, which injects helpers such as
+# set_temp_state_key and add_message_tag as globals.
+"nodes/*.py" = ["F821"]
+
+[lint.isort]
+known-first-party = ["app", "ocs"]
+
+[format]
+# Keep the pattern table line-for-line comparable with backend/app/services/danger_signs.py.
+exclude = ["nodes/danger_gate.py"]
