@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZEYA by Evarest Technologies</title>
+<meta name="description" content="ZEYA is a WhatsApp antenatal education assistant built by Evarest Technologies Ltd, Kenya. It is preparing for a trial in Migori County and is not yet open to users.">
+<meta name="theme-color" content="#861DAF">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230C6F63'/%3E%3Cpath fill='%23fff' d='M16 17h30v9L29 39h17v9H16v-9l17-13H16z'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #FFFFFF; --surface: #F7F7F5; --text: #111111; --muted: #5E5E5A; --border: #E4E4E0;
+    --accent: #861DAF; --accent-hover: #791A9E; --accent-tint: #F7EFF9;
+    --dark: #0B0A10; --on-dark-muted: #B4B0C0;
+    --wa-header: #008069; --wa-bg: #EFEAE2; --wa-out: #D9FDD3; --wa-in: #FFFFFF; --wa-meta: #667781;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 18px/1.6 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--accent); }
+  a:focus-visible, .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  header.top { border-bottom: 1px solid var(--border); }
+  header.top .wrap { display: flex; align-items: center; justify-content: space-between; min-height: 64px; gap: 16px; }
+  .brand { font-weight: 700; color: var(--text); text-decoration: none; }
+  .brand span { color: var(--muted); font-weight: 400; }
+  nav a { color: var(--text); text-decoration: none; font-size: 16px; }
+  nav a:hover { color: var(--accent); }
+  .eyebrow { font: 600 13px/1.4 ui-monospace, "JetBrains Mono", Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0 0 12px; }
+  h1, h2, h3 { letter-spacing: -0.03em; line-height: 1.15; margin: 0 0 16px; }
+  h1 { font-size: 40px; }
+  h2 { font-size: 31px; }
+  h3 { font-size: 20px; letter-spacing: -0.01em; margin-bottom: 8px; }
+  p { margin: 0 0 16px; max-width: 68ch; }
+  .muted { color: var(--muted); }
+  section { padding: 64px 0; }
+  .hero { padding-top: 48px; }
+  .grid { display: grid; gap: 48px; align-items: center; }
+  .pill { display: inline-block; background: var(--accent-tint); color: var(--accent); font-size: 14px; font-weight: 600; padding: 4px 12px; border-radius: 999px; margin-bottom: 16px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+  .btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 8px; font-size: 16px; font-weight: 600; text-decoration: none; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { border: 1px solid var(--text); color: var(--text); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .band { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .cards { display: grid; gap: 24px; margin-top: 32px; }
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+  .card p { font-size: 16px; margin: 0; }
+  .card.tinted { background: var(--accent-tint); border-color: transparent; }
+  ul.plain { padding-left: 20px; margin: 0 0 16px; max-width: 68ch; }
+  ul.plain li { margin-bottom: 8px; }
+  /* WhatsApp-style mockup, colours copied from WhatsApp so it reads as the real channel */
+  figure { margin: 0; }
+  .phone { max-width: 340px; margin: 0 auto; border: 10px solid var(--dark); border-radius: 32px; overflow: hidden; background: var(--wa-bg); }
+  .phone .bar { background: var(--wa-header); color: #fff; padding: 12px 16px; font-size: 16px; font-weight: 600; }
+  .phone .bar small { display: block; font-weight: 400; font-size: 12px; opacity: .9; }
+  .chat { padding: 16px 12px 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.45; }
+  .msg { max-width: 85%; padding: 8px 10px; border-radius: 8px; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
+  .msg.out { align-self: flex-end; background: var(--wa-out); }
+  .msg.in { align-self: flex-start; background: var(--wa-in); }
+  .msg.urgent { border-left: 3px solid #B42318; }
+  .msg b { font-weight: 700; }
+  figcaption { text-align: center; font-size: 14px; color: var(--muted); margin-top: 12px; }
+  footer { background: var(--dark); color: var(--on-dark-muted); padding: 48px 0; font-size: 16px; }
+  footer a { color: #D8A8F0; }
+  footer p { margin-bottom: 8px; }
+  @media (min-width: 768px) {
+    h1 { font-size: 56px; }
+    h2 { font-size: 40px; }
+    section { padding: 96px 0; }
+    .hero { padding-top: 64px; }
+    .grid { grid-template-columns: 1.15fr 1fr; }
+    .cards { grid-template-columns: repeat(3, 1fr); }
+    .cards.two { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="https://evarestke.com/">Evarest <span>Technologies</span></a>
+    <nav aria-label="Page"><a href="#contact">Contact</a></nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap grid">
+      <div>
+        <p class="eyebrow">ZEYA</p>
+        <span class="pill">Preparing for trial</span>
+        <h1>Antenatal education for pregnant women, on WhatsApp.</h1>
+        <p><strong>ZEYA is built and run by Evarest Technologies Ltd</strong>, a software company incorporated in Kenya.</p>
+        <p class="muted">ZEYA answers questions about pregnancy in English and Kiswahili, using World Health Organization and Kenya Ministry of Health guidelines. It is preparing for a randomised controlled trial in Migori County. It is not yet open to users.</p>
+        <div class="btns">
+          <a class="btn btn-primary" href="#contact">Contact the team</a>
+          <a class="btn btn-secondary" href="https://github.com/EvarestTechnologies/zeya">View the code</a>
+        </div>
+      </div>
+      <figure>
+        <div class="phone" role="img" aria-label="Example WhatsApp conversation with ZEYA about a danger sign">
+          <div class="bar">ZEYA<small>Evarest Technologies Ltd</small></div>
+          <div class="chat" aria-hidden="true">
+            <div class="msg out">I am bleeding a lot</div>
+            <div class="msg in urgent"><b>URGENT</b>: This sounds like it could be a danger sign that requires immediate medical attention.<br>1. Go to your nearest health facility immediately or call emergency services.</div>
+            <div class="msg out">What should I eat at 23 weeks?</div>
+            <div class="msg in">Eat a variety of local foods, Mama: beans, ndengu, eggs, omena and fish for protein and iron, and sukuma wiki, managu and fruit for vitamins.</div>
+          </div>
+        </div>
+        <figcaption>Example conversation, shortened. Not medical advice.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <p class="eyebrow">Safety first</p>
+      <h2>Danger signs never wait for AI.</h2>
+      <div class="cards">
+        <div class="card tinted">
+          <h3>Fixed rules, not AI</h3>
+          <p>Danger signs like bleeding, convulsions or water breaking are detected by fixed rules in English and Kiswahili, never by AI.</p>
+        </div>
+        <div class="card">
+          <h3>Emergency message first</h3>
+          <p>When a danger sign is detected, ZEYA sends an emergency message with health facility contacts before any AI runs.</p>
+        </div>
+        <div class="card">
+          <h3>Education, not diagnosis</h3>
+          <p>ZEYA does not diagnose or treat. It reminds women to attend antenatal care and to see a health worker.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap grid">
+      <div>
+        <p class="eyebrow">Research</p>
+        <h2>Part of a research study.</h2>
+        <p>ZEYA asks for consent before enrolling anyone in the study. Taking part is voluntary. Researchers analyse conversations under a study number instead of a name or phone number.</p>
+        <p>Read the <a href="https://github.com/EvarestTechnologies/zeya/blob/main/docs/privacy-policy.md">ZEYA privacy policy</a>.</p>
+      </div>
+      <div>
+        <p class="eyebrow">Open source</p>
+        <h2>Built in the open.</h2>
+        <p>ZEYA runs on <a href="https://github.com/dimagi/open-chat-studio">Open Chat Studio</a>, an open-source chatbot platform by Dimagi. ZEYA's code is published under the Apache License 2.0.</p>
+        <p><a href="https://github.com/EvarestTechnologies/zeya">github.com/EvarestTechnologies/zeya</a></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="contact">
+  <div class="wrap">
+    <p><strong style="color:#fff">Evarest Technologies Ltd</strong>, Nairobi, Kenya</p>
+    <p><a href="mailto:contact@evarestke.com">contact@evarestke.com</a> · <a href="tel:+254723469406">+254 723 469 406</a></p>
+    <p><a href="https://evarestke.com/">evarestke.com</a> · <a href="https://www.linkedin.com/company/evarest-technologies/">LinkedIn</a> · <a href="https://x.com/Evarestke">X</a></p>
+    <p>© 2026 Evarest Technologies Ltd</p>
+  </div>
+</footer>
+</body>
+</html>
